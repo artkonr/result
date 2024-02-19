@@ -1,0 +1,19 @@
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+        mavenLocal()
+    }
+    plugins {
+        id "io.freefair.lombok" version "${lombokVersion}"
+    }
+}
+dependencyResolutionManagement {
+    repositories {
+        mavenLocal()
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'result'
+
