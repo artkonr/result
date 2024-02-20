@@ -20,14 +20,15 @@ jobs:
       - name: Pull GPG key
         env:
           GPG_KEY_ID: ${{ vars.GPG_KEY_ID }}
-          GPG_KEY_SERVER: ${{ vars.GPG_KEY_SERVER }}
-        run:
-          gpg --keyserver $GPG_KEY_SERVER --receive-keys $GPG_KEY_ID
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          printf "$GPG_PRIVATE_KEY" > .privatekey
+          gpg --import .privatekey
 
       - name: Pull settings file
         env:
           SETTINGS_XML: ${{ vars.SETTINGS_XML }}
-        run:
+        run: |
           printf "$SETTINGS_XML" | base64 -d > settings.xml
 
       - name: Deploy
@@ -36,5 +37,5 @@ jobs:
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
           GPG_KEY_ID: ${{ vars.GPG_KEY_ID }}
           GPG_PASSWORD: ${{ secrets.GPG_PASSWORD }}
-        run:
+        run: |
           mvn -B --settings settings.xml deploy
