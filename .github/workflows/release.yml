@@ -29,9 +29,7 @@ jobs:
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
           GPG_KEY_ID: ${{ vars.GPG_KEY_ID }}
           GPG_PASSWORD: ${{ secrets.GPG_PASSWORD }}
+          SETTINGS_XML: ${{ vars.SETTINGS_XML }}
         run: |
           echo "$SETTINGS_XML" | base64 -d > settings.xml
-          
-          cat settings.xml
-          
           mvn -B --settings settings.xml deploy
