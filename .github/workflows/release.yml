@@ -10,47 +10,32 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup JDK
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-
       - name: Pull GPG key
         uses: crazy-max/ghaction-import-gpg@v6
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.GPG_PASSWORD }}
-
       - name: Pull settings file
         env:
-          SETTINGS_XML: ${{ vars.SETTINGS_XML }}
+          SETTINGS_XML: ${{ secrets.SETTINGS_XML }}
         run: |
           echo "$SETTINGS_XML" | base64 -d > settings.xml
-
       - name: Set job git credentials
         run: |
           git config --local user.email 'gh-chore@github.io'
           git config --local user.name 'gh-chore'
-
-      - name: Prepare release
+      - name: Create release branch
+        run:
+          git checkout -b release
+      - name: Release
         env:
           GPG_KEY_ID: ${{ vars.GPG_KEY_ID }}
           GPG_PASSWORD: ${{ secrets.GPG_PASSWORD }}
         run: |
           mvn -B --settings settings.xml release:prepare
-
-      - name: Perform release
-        env:
-          GPG_KEY_ID: ${{ vars.GPG_KEY_ID }}
-          GPG_PASSWORD: ${{ secrets.GPG_PASSWORD }}
-        run: |
           mvn -B --settings settings.xml release:perform
-
-      - name: Deploy
-        env:
-          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
-          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
-        run: |
-          mvn -B --settings settings.xml central-publishing:publish
