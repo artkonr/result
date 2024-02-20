@@ -31,4 +31,7 @@ jobs:
           GPG_PASSWORD: ${{ secrets.GPG_PASSWORD }}
         run: |
           echo "$SETTINGS_XML" | base64 -d > settings.xml
+          
+          cat settings.xml
+          
           mvn -B --settings settings.xml deploy
