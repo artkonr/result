@@ -24,13 +24,17 @@ jobs:
         run:
           gpg --keyserver $GPG_KEY_SERVER --receive-keys $GPG_KEY_ID
 
+      - name: Pull settings file
+        env:
+          SETTINGS_XML: ${{ vars.SETTINGS_XML }}
+        run:
+          printf "$SETTINGS_XML" | base64 -d > settings.xml
+
       - name: Deploy
         env:
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
           GPG_KEY_ID: ${{ vars.GPG_KEY_ID }}
           GPG_PASSWORD: ${{ secrets.GPG_PASSWORD }}
-          SETTINGS_XML: ${{ vars.SETTINGS_XML }}
         run:
-          printf "$SETTINGS_XML" | base64 -d > settings.xml
           mvn -B --settings settings.xml deploy
