@@ -23,15 +23,24 @@ jobs:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.GPG_PASSWORD }}
 
+      - name: Pull settings file
+        env:
+          SETTINGS_XML: ${{ vars.SETTINGS_XML }}
+        run: |
+          echo "$SETTINGS_XML" | base64 -d > settings.xml
+
+      - name: Set job git credentials
+        run: |
+          git config --local user.email 'gh-chore@github.io'
+          git config --local user.name 'gh-chore'
+
       - name: Deploy
         env:
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
           GPG_KEY_ID: ${{ vars.GPG_KEY_ID }}
           GPG_PASSWORD: ${{ secrets.GPG_PASSWORD }}
-          SETTINGS_XML: ${{ vars.SETTINGS_XML }}
         run: |
-          echo "$SETTINGS_XML" | base64 -d > settings.xml
           mvn -B --settings settings.xml release:prepare
           mvn -B --settings settings.xml release:perform
           mvn -B --settings settings.xml deploy
