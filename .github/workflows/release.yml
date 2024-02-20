@@ -34,12 +34,18 @@ jobs:
           git config --local user.email 'gh-chore@github.io'
           git config --local user.name 'gh-chore'
 
-      - name: Build for release
+      - name: Prepare release
         env:
           GPG_KEY_ID: ${{ vars.GPG_KEY_ID }}
           GPG_PASSWORD: ${{ secrets.GPG_PASSWORD }}
         run: |
           mvn -B --settings settings.xml release:prepare
+
+      - name: Perform release
+        env:
+          GPG_KEY_ID: ${{ vars.GPG_KEY_ID }}
+          GPG_PASSWORD: ${{ secrets.GPG_PASSWORD }}
+        run: |
           mvn -B --settings settings.xml release:perform
 
       - name: Deploy
