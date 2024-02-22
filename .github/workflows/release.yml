@@ -22,7 +22,7 @@ jobs:
           passphrase: ${{ secrets.GPG_PASSWORD }}
       - name: Pull settings file
         env:
-          SETTINGS_XML: ${{ vars.SETTINGS_XML }}
+          SETTINGS_XML: ${{ secrets.SETTINGS_XML }}
         run: |
           echo "$SETTINGS_XML" | base64 -d > settings.xml
       - name: Set job git credentials
@@ -36,7 +36,5 @@ jobs:
         env:
           GPG_KEY_ID: ${{ vars.GPG_KEY_ID }}
           GPG_PASSWORD: ${{ secrets.GPG_PASSWORD }}
-          SONATYPE_JIRA_USERNAME: ${{ secrets.SONATYPE_JIRA_USERNAME }}
-          SONATYPE_JIRA_PASSWORD: ${{ secrets.SONATYPE_JIRA_PASSWORD }}
         run: |
           mvn -B --settings settings.xml deploy
