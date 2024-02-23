@@ -37,4 +37,5 @@ jobs:
           GPG_KEY_ID: ${{ vars.GPG_KEY_ID }}
           GPG_PASSWORD: ${{ secrets.GPG_PASSWORD }}
         run: |
-          mvn -B --settings settings.xml deploy
+          mvn -B --settings settings.xml release:prepare
+          mvn -B --settings settings.xml release:perform
