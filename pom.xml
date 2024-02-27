@@ -4,7 +4,7 @@
 
     <groupId>io.github.artkonr</groupId>
     <artifactId>result</artifactId>
-    <version>1.1.0</version>
+    <version>1.1.1-SNAPSHOT</version>
     <description>Result monad for Java</description>
     <packaging>jar</packaging>
     <name>${project.groupId}:${project.artifactId}</name>
@@ -13,7 +13,7 @@
     <scm>
         <url>https://github.com/artkonr/result.git</url>
         <connection>scm:git:https://github.com/artkonr/result.git</connection>
-        <tag>v1.1.0</tag>
+        <tag>v1.0.0</tag>
     </scm>
 
     <developers>
