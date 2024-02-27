@@ -2,6 +2,7 @@ package io.github.artkonr.result;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -18,6 +19,13 @@ class ResultTest {
         var wrapped = Result.wrap(IllegalStateException.class, () -> { throw new IllegalStateException(); });
         assertTrue(wrapped.isErr());
         assertInstanceOf(IllegalStateException.class, wrapped.error);
+    }
+
+    @Test
+    void wrap_err_checked() {
+        var wrapped = Result.wrap(IOException.class, () -> { throw new IOException(); });
+        assertTrue(wrapped.isErr());
+        assertInstanceOf(IOException.class, wrapped.error);
     }
 
     @Test
