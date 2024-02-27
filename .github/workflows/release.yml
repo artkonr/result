@@ -38,4 +38,4 @@ jobs:
           GPG_PASSWORD: ${{ secrets.GPG_PASSWORD }}
         run: |
           mvn -B --settings settings.xml release:prepare
-          mvn -B --settings settings.xml -DskipTests -X release:perform
+          mvn -B --settings settings.xml -DskipTests release:perform
