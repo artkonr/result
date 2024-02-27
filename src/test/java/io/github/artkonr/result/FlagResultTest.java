@@ -2,6 +2,7 @@ package io.github.artkonr.result;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -67,6 +68,13 @@ class FlagResultTest {
         FlagResult<RuntimeException> wrapped = FlagResult.wrap(RuntimeException.class, () -> { throw new IllegalStateException(); });
         assertTrue(wrapped.isErr());
         assertInstanceOf(IllegalStateException.class, wrapped.error);
+    }
+
+    @Test
+    void wrap_err_checked() {
+        var wrapped = FlagResult.wrap(IOException.class, () -> { throw new IOException(); });
+        assertTrue(wrapped.isErr());
+        assertInstanceOf(IOException.class, wrapped.error);
     }
 
     @Test

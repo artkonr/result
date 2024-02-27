@@ -22,7 +22,7 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
     protected final V item;
 
     /**
-     * Runs a specified {@link Supplier}, catches an expected exception
+     * Runs a specified {@link Wrap.Supplier}, catches an expected exception
      *  and returns it as a {@link Result}.
      * <p>The expected exception can be any {@link Exception} type,
      *  this method internally checks if the caught exception type
@@ -41,7 +41,7 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
      *  of an expected type or its subtype
      */
     public static <V, E extends Exception> Result<V, E> wrap(@NonNull Class<E> errType,
-                                                             @NonNull Supplier<V> action) {
+                                                             @NonNull Wrap.Supplier<V> action) {
         try {
             V item = action.get();
             return Result.ok(item);

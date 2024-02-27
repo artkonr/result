@@ -2,13 +2,10 @@ package io.github.artkonr.result;
 
 import lombok.NonNull;
 
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
 
 /**
  * A {@link BaseResult result} container that carries no value.
@@ -17,7 +14,7 @@ import java.util.stream.Stream;
 public class FlagResult<E extends Exception> extends BaseResult<E> {
 
     /**
-     * Runs a specified {@link Runnable}, catches an expected exception
+     * Runs a specified {@link Wrap.Runnable}, catches an expected exception
      *  and returns it as a {@link FlagResult}.
      * <p>The expected exception can be any {@link Exception} type,
      *  this method internally checks if the caught exception type
@@ -34,7 +31,7 @@ public class FlagResult<E extends Exception> extends BaseResult<E> {
      *  of an expected type or its subtype
      */
     public static <E extends Exception> FlagResult<E> wrap(@NonNull Class<E> errType,
-                                                           @NonNull Runnable action) {
+                                                           @NonNull Wrap.Runnable action) {
         try {
             action.run();
             return FlagResult.ok();
