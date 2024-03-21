@@ -6,7 +6,7 @@ An alternative to `try/catch` following the design pattern offered by `java.util
 
 ## Getting started
 
-Library installation is available for [Maven](#maven) and [Gradle](#gradle).
+Library installation is available for [Maven](#maven) and [Gradle](#gradle) and targets Java 17.
 
 ### Maven
 
