@@ -3,6 +3,7 @@ package io.github.artkonr.result;
 import lombok.NonNull;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -101,12 +102,41 @@ public class FlagResult<E extends Exception> extends BaseResult<E> {
      * @throws IllegalArgumentException if no argument provided
      */
     public static <E extends Exception> FlagResult<E> join(@NonNull Collection<BaseResult<E>> results) {
-        return results.stream()
+        return join(results, TakeFrom.HEAD);
+    }
+
+    /**
+     * Joins a {@link Collection} of {@link BaseResult any result} objects into
+     *  a single {@link FlagResult}.
+     * <p>The eventual {@link FlagResult} will have the {@code OK} state
+     *  iff. all {@link BaseResult source results} are {@code OK}. Otherwise,
+     *  the internal error of is taken as described by {@link TakeFrom}.
+     * <p>As {@link Collection} does not specify the ordering, the eventual
+     *  {@link FlagResult} is not guaranteed to contain the same internal
+     *  error state every time.
+     * <p>Null-safe: should the input contain {@code null} items,
+     *  this method will remove them.
+     * @param results collection of {@link BaseResult results}
+     * @param rule fusing rule
+     * @return results joined into a {@link FlagResult}
+     * @param <E> error type
+     * @throws IllegalArgumentException if no argument provided
+     */
+    public static <E extends Exception> FlagResult<E> join(@NonNull Collection<BaseResult<E>> results,
+                                                           @NonNull TakeFrom rule) {
+        List<BaseResult<E>> errored = results.stream()
                 .filter(Objects::nonNull)
                 .filter(BaseResult::isErr)
-                .findFirst()
-                .map(errResult -> FlagResult.err(errResult.getErr()))
-                .orElseGet(FlagResult::ok);
+                .toList();
+        if (!errored.isEmpty()) {
+            BaseResult<E> picked = switch (rule) {
+                case HEAD -> errored.get(0);
+                case TAIL -> errored.get(errored.size() - 1);
+            };
+            return FlagResult.err(picked.error);
+        } else {
+            return FlagResult.ok();
+        }
     }
 
     /**
@@ -141,15 +171,31 @@ public class FlagResult<E extends Exception> extends BaseResult<E> {
      * @throws IllegalArgumentException if no argument provided
      */
     public FlagResult<E> fuse(@NonNull FlagResult<E> another) {
-        if (isErr()) {
-            return err(error);
-        }
+        return fuse(another, TakeFrom.HEAD);
+    }
 
-        if (another.isErr()) {
-            return err(another.getErr());
-        }
-
-        return ok();
+    /**
+     * Produces a new {@link FlagResult} out of {@code this}
+     *  and another {@link FlagResult}.
+     * <p>The eventual {@link FlagResult} will have {@code OK}
+     *  state iff. both instances are {@code OK}; {@code ERR}
+     *  state is assumed otherwise, with the error taken from
+     *  the only {@code ERR} from the pair. If both instances
+     *  are {@code ERR}, the {@link TakeFrom rule arg} allows
+     *  to point which of the {@code ERR} items passes the
+     *  error on.
+     * <p>In order to be fuse-able, the fused items must contain
+     *  the same error type.
+     * @param another fuse with
+     * @param rule fusing rule
+     * @return a new {@link FlagResult}
+     * @throws IllegalArgumentException if no argument provided
+     */
+    public FlagResult<E> fuse(@NonNull FlagResult<E> another,
+                              @NonNull TakeFrom rule) {
+        return rule.takeError(this, another)
+                .map(FlagResult::err)
+                .orElseGet(FlagResult::ok);
     }
 
     /**
@@ -248,4 +294,5 @@ public class FlagResult<E extends Exception> extends BaseResult<E> {
     protected FlagResult(E error) {
         super(error);
     }
+
 }

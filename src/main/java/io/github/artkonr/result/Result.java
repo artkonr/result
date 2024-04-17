@@ -117,18 +117,46 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
      * @throws IllegalArgumentException if no argument provided
      */
     public static <V, E extends Exception> Result<List<V>, E> join(@NonNull Collection<Result<V, E>> results) {
+        return join(results, TakeFrom.HEAD);
+    }
+
+    /**
+     * Joins a {@link Collection} of {@link Result} objects into
+     *  a {@link Result} of {@link List} of items.
+     * <p>The eventual {@link Result} will have the {@code OK} state
+     *  iff. all {@link Result source results} are {@code OK}. Otherwise,
+     *  the internal error of is taken as described by {@link TakeFrom}.
+     * <p>As {@link Collection} does not specify the ordering, the eventual
+     *  {@link Result} is not guaranteed to contain the same internal
+     *  error state every time.
+     * <p>Null-safe: should the input contain {@code null} items,
+     *  this method will remove them.
+     * @param results collection of {@link Result results}
+     * @param rule fusing rule
+     * @return results joined into a {@link Result}
+     * @param <V> item type
+     * @param <E> error type
+     * @throws IllegalArgumentException if no argument provided
+     */
+    public static <V, E extends Exception> Result<List<V>, E> join(@NonNull Collection<Result<V, E>> results,
+                                                                   @NonNull TakeFrom rule) {
         List<Result<V, E>> nonNull = results.stream()
                 .filter(Objects::nonNull)
                 .toList();
-
-        return nonNull.stream()
+        List<Result<V, E>> errored = nonNull.stream()
                 .filter(BaseResult::isErr)
-                .findFirst()
-                .<Result<List<V>, E>>map(result -> Result.err(result.error))
-                .orElseGet(() -> Result.ok(nonNull.stream()
-                        .map(result -> result.item)
-                        .toList())
-                );
+                .toList();
+        if (!errored.isEmpty()) {
+            Result<V, E> result = switch (rule) {
+                case HEAD -> errored.get(0);
+                case TAIL -> errored.get(errored.size() - 1);
+            };
+            return Result.err(result.error);
+        } else {
+            return Result.ok(nonNull.stream()
+                    .map(result -> result.item)
+                    .toList());
+        }
     }
 
     /**
@@ -163,16 +191,33 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
      * @throws IllegalArgumentException if no argument provided
      */
     public <N> Result<Fuse<V, N>, E> fuse(@NonNull Result<N, E> another) {
-        if (isErr()) {
-            return err(error);
-        }
+        return fuse(another, TakeFrom.HEAD);
+    }
 
-        if (another.isErr()) {
-            return err(another.error);
-        }
-
-        Fuse<V, N> fused = new Fuse<>(item, another.item);
-        return ok(fused);
+    /**
+     * Produces a new {@link Result} out of {@code this}
+     *  and another {@link Result} by combining their
+     *  items into a {@link Fuse}.
+     * <p>The eventual {@link Result} will have {@code OK}
+     *  state iff. both instances are {@code OK}; {@code ERR}
+     *  state is assumed otherwise with the error taken from
+     *  the only {@code ERR} from the pair. If both instances
+     *  are {@code ERR}, the {@link TakeFrom rule arg} allows
+     *  to point which of the {@code ERR} items passes the
+     *  error on.
+     * <p>In order to be fuse-able, fused items must contain
+     *  the same error type.
+     * @param another fuse with
+     * @param rule fusing rule
+     * @param <N> fused item type
+     * @return a new {@link Result} containing {@link Fuse}
+     * @throws IllegalArgumentException if either of the arguments not provided
+     */
+    public <N> Result<Fuse<V, N>, E> fuse(@NonNull Result<N, E> another,
+                                          @NonNull TakeFrom rule) {
+        return rule.takeError(this, another)
+                .<Result<Fuse<V, N>, E>>map(Result::err)
+                .orElseGet(() -> Result.ok(new Fuse<>(this.item, another.item)));
     }
 
     /**
@@ -184,8 +229,8 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
      *  the only {@code ERR} from the pair or from {@code this}
      *  instance if both are {@code ERR}.
      * <p>As source {@link BaseResult result} may or may not
-     *  contain an item (contrary to {@link Result#fuse(Result)}
-     *  the other implementation), the {@code OK} result is
+     *  contain an item (contrary to {@link Result#fuse(Result)
+     *  the other implementation}), the {@code OK} result is
      *  always resolved using item belonging to {@code this} instance.
      * <p>In order to be fuse-able, fused items must contain
      *  the same error type.
@@ -194,15 +239,37 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
      * @throws IllegalArgumentException if no argument provided
      */
     public Result<V, E> fuse(@NonNull BaseResult<E> another) {
-        if (isErr()) {
-            return err(error);
-        }
+        return TakeFrom.HEAD.takeError(this, another)
+                .<Result<V, E>>map(Result::err)
+                .orElseGet(() -> Result.ok(this.item));
+    }
 
-        if (another.isErr()) {
-            return err(another.error);
-        }
-
-        return ok(item);
+    /**
+     * Produces a new {@link Result} out of {@code this}
+     *  and {@link BaseResult any other result}.
+     * <p>The eventual {@link Result} will have {@code OK}
+     *  state iff. both instances are {@code OK}; {@code ERR}
+     *  state is assumed otherwise, with the error taken from
+     *  the only {@code ERR} from the pair. If both instances
+     *  are {@code ERR}, the {@link TakeFrom rule arg} allows
+     *  to point which of the {@code ERR} items passes the
+     *  error on.
+     * <p>As source {@link BaseResult result} may or may not
+     *  contain an item (contrary to {@link Result#fuse(Result)
+     *  the other implementation}), the {@code OK} result is
+     *  always resolved using item belonging to {@code this} instance.
+     * <p>In order to be fuse-able, fused items must contain
+     *  the same error type.
+     * @param another fuse with
+     * @param rule fusing rule
+     * @return a new {@link FlagResult}
+     * @throws IllegalArgumentException if either of the arguments not provided
+     */
+    public Result<V, E> fuse(@NonNull BaseResult<E> another,
+                             @NonNull TakeFrom rule) {
+        return rule.takeError(this, another)
+                .<Result<V, E>>map(Result::err)
+                .orElseGet(() -> Result.ok(this.item));
     }
 
     /**
