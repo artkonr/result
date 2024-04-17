@@ -125,6 +125,42 @@ class FlagResultTest {
     }
 
     @Test
+    void join_with_rule_null_arg() {
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.join(List.of(), null));
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.join(null, null));
+    }
+
+    @Test
+    void join_with_rule_many_err_tail() {
+        RuntimeException headEx = new RuntimeException();
+        RuntimeException tailEx = new RuntimeException();
+
+        FlagResult<RuntimeException> r1 = FlagResult.err(headEx);
+        FlagResult<RuntimeException> r2 = FlagResult.err(tailEx);
+        FlagResult<RuntimeException> r3 = FlagResult.ok();
+
+        List<BaseResult<RuntimeException>> results = List.of(r1, r2, r3);
+        FlagResult<?> joined = FlagResult.join(results, TakeFrom.TAIL);
+        assertTrue(joined.isErr());
+        assertSame(tailEx, joined.error);
+    }
+
+    @Test
+    void join_with_rule_many_err_head() {
+        RuntimeException headEx = new RuntimeException();
+        RuntimeException tailEx = new RuntimeException();
+
+        FlagResult<RuntimeException> r1 = FlagResult.err(headEx);
+        FlagResult<RuntimeException> r2 = FlagResult.err(tailEx);
+        FlagResult<RuntimeException> r3 = FlagResult.ok();
+
+        List<BaseResult<RuntimeException>> results = List.of(r1, r2, r3);
+        FlagResult<?> joined = FlagResult.join(results, TakeFrom.HEAD);
+        assertTrue(joined.isErr());
+        assertSame(headEx, joined.error);
+    }
+
+    @Test
     void unwrap_ok() {
         var ok = FlagResult.ok();
         assertDoesNotThrow(ok::unwrap);
@@ -243,7 +279,7 @@ class FlagResultTest {
         var fused = first.fuse(second);
 
         assertTrue(fused.isErr());
-        assertSame(ex1, first.error);
+        assertSame(ex1, fused.error);
     }
 
     @Test
@@ -254,7 +290,7 @@ class FlagResultTest {
         var fused = first.fuse(second);
 
         assertTrue(fused.isErr());
-        assertSame(ex, second.error);
+        assertSame(ex, fused.error);
     }
 
     @Test
@@ -265,7 +301,7 @@ class FlagResultTest {
         var fused = first.fuse(second);
 
         assertTrue(fused.isErr());
-        assertSame(ex, first.error);
+        assertSame(ex, fused.error);
     }
 
     @Test
@@ -280,6 +316,98 @@ class FlagResultTest {
     @Test
     void fuse_null_arg() {
         assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().fuse(null));
+    }
+
+    @Test
+    void fuse_with_rule_tail_first_ok_second_ok() {
+        var first = FlagResult.ok();
+        var second = FlagResult.ok();
+
+        var fused = first.fuse(second, TakeFrom.TAIL);
+        assertTrue(fused.isOk());
+    }
+
+    @Test
+    void fuse_with_rule_tail_first_ok_second_err() {
+        RuntimeException ex = new RuntimeException();
+        FlagResult<RuntimeException> first = FlagResult.ok();
+        var second = FlagResult.err(ex);
+        var fused = first.fuse(second, TakeFrom.TAIL);
+
+        assertTrue(fused.isErr());
+        assertSame(ex, fused.error);
+    }
+
+    @Test
+    void fuse_with_rule_tail_first_err_second_ok() {
+        RuntimeException ex = new RuntimeException();
+        FlagResult<RuntimeException> first = FlagResult.err(ex);
+        FlagResult<RuntimeException> second = FlagResult.ok();
+        var fused = first.fuse(second, TakeFrom.TAIL);
+
+        assertTrue(fused.isErr());
+        assertSame(ex, fused.error);
+    }
+
+    @Test
+    void fuse_with_rule_tail_first_err_second_err() {
+        RuntimeException ex1 = new RuntimeException();
+        RuntimeException ex2 = new RuntimeException();
+        FlagResult<RuntimeException> first = FlagResult.err(ex1);
+        FlagResult<RuntimeException> second = FlagResult.err(ex2);
+        var fused = first.fuse(second, TakeFrom.TAIL);
+
+        assertTrue(fused.isErr());
+        assertSame(ex2, fused.error);
+    }
+
+    @Test
+    void fuse_with_rule_head_first_ok_second_ok() {
+        var first = FlagResult.ok();
+        var second = FlagResult.ok();
+
+        var fused = first.fuse(second, TakeFrom.HEAD);
+        assertTrue(fused.isOk());
+    }
+
+    @Test
+    void fuse_with_rule_head_first_ok_second_err() {
+        RuntimeException ex = new RuntimeException();
+        FlagResult<RuntimeException> first = FlagResult.ok();
+        var second = FlagResult.err(ex);
+        var fused = first.fuse(second, TakeFrom.HEAD);
+
+        assertTrue(fused.isErr());
+        assertSame(ex, fused.error);
+    }
+
+    @Test
+    void fuse_with_rule_head_first_err_second_ok() {
+        RuntimeException ex = new RuntimeException();
+        FlagResult<RuntimeException> first = FlagResult.err(ex);
+        FlagResult<RuntimeException> second = FlagResult.ok();
+        var fused = first.fuse(second, TakeFrom.HEAD);
+
+        assertTrue(fused.isErr());
+        assertSame(ex, fused.error);
+    }
+
+    @Test
+    void fuse_with_rule_head_first_err_second_err() {
+        RuntimeException ex1 = new RuntimeException();
+        RuntimeException ex2 = new RuntimeException();
+        FlagResult<RuntimeException> first = FlagResult.err(ex1);
+        FlagResult<RuntimeException> second = FlagResult.err(ex2);
+        var fused = first.fuse(second, TakeFrom.HEAD);
+
+        assertTrue(fused.isErr());
+        assertSame(ex1, fused.error);
+    }
+
+    @Test
+    void fuse_with_rule_null_arg() {
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().fuse(FlagResult.ok(), null));
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().fuse(null, null));
     }
 
     @Test
