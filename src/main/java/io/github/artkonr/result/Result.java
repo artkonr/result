@@ -160,6 +160,24 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
     }
 
     /**
+     * Takes an {@link Optional} out of an {@code OK} {@link Result}
+     *  and wraps the said {@link Result} into an {@link Optional}.
+     * <p>The wrapped {@link Result} retains the state of the input.
+     * <p>The wrapping {@link Optional} retains the state of the input.
+     * @param result {@link Result} bearing an {@link Optional} object to elevate
+     * @return {@link Result} wrapped in {@link Optional}
+     * @param <V> item type
+     * @param <E> error type
+     */
+    public static <V, E extends Exception> Optional<Result<V, E>> elevate(@NonNull Result<Optional<V>, E> result) {
+        if (result.isOk()) {
+            return result.get().map(Result::ok);
+        } else {
+            return Optional.of(Result.err(result.error));
+        }
+    }
+
+    /**
      * Attempts to get {@code OK} state or throws
      *  if {@code this} instance is {@code ERR}.
      * @return {@code OK} item
