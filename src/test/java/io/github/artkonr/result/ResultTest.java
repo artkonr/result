@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -173,6 +174,34 @@ class ResultTest {
         Result<List<Integer>, RuntimeException> joined = Result.join(results);
         assertTrue(joined.isOk());
         assertEquals(2, joined.item.size());
+    }
+
+    @Test
+    void elevate_ok_result_present_optional() {
+        var item = Result.ok(Optional.of(10));
+        var elevated = Result.elevate(item);
+        assertTrue(elevated.isPresent());
+        assertTrue(elevated.get().isOk());
+    }
+
+    @Test
+    void elevate_ok_result_empty_optional() {
+        var item = Result.ok(Optional.empty());
+        var elevated = Result.elevate(item);
+        assertTrue(elevated.isEmpty());
+    }
+
+    @Test
+    void elevate_err_result_present_optional() {
+        Result<Optional<Object>, RuntimeException> item = Result.err(new RuntimeException());
+        var elevated = Result.elevate(item);
+        assertTrue(elevated.isPresent());
+        assertTrue(elevated.get().isErr());
+    }
+
+    @Test
+    void elevate_null_arg() {
+        assertThrows(IllegalArgumentException.class, () -> Result.elevate(null));
     }
 
     @Test
