@@ -421,6 +421,50 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
     }
 
     /**
+     * Converts an {@code ERR} result into {@code OK}
+     *  using the specified factory faction. If {@code this}
+     *  result is already an {@code OK} result, the internal
+     *  {@code OK} object is returned.
+     * <p>Equivalent to {@link Result#unwrapOr(Supplier)},
+     *  except that this method returns a result.
+     * @param factory {@code OK} object factory
+     * @return new {@code OK} result with recovery object
+     * @throws IllegalArgumentException if either of the arguments not
+     *  provided or if the factory function returns {@code null}
+     */
+    public Result<V, E> recover(@NonNull Supplier<V> factory) {
+        if (isOk()) {
+            return Result.ok(item);
+        } else {
+            return Result.ok(factory.get());
+        }
+    }
+
+    /**
+     * Converts an {@code ERR} result into {@code OK}
+     *  using the specified factory faction. If {@code this}
+     *  result is already an {@code OK} result, the internal
+     *  {@code OK} object is returned.
+     * <p>If the predicate does not hold, returns the
+     *  recreated {@code OK} item.
+     * @param condition checked predicate
+     * @param factory {@code OK} object factory
+     * @return new {@code OK} result with recovery object
+     * @throws IllegalArgumentException if either of the arguments not
+     *  provided or if the factory function returns {@code null}
+     */
+    public Result<V, E> recover(@NonNull Predicate<E> condition,
+                                @NonNull Supplier<V> factory) {
+        if (isOk()) {
+            return Result.ok(item);
+        } else {
+            return condition.test(error)
+                    ? Result.ok(factory.get())
+                    : Result.err(error);
+        }
+    }
+
+    /**
      * Performs the specified callback if {@code this}
      *  instance is {@code OK} or does nothing otherwise.
      * @param action callback

@@ -3,10 +3,7 @@ package io.github.artkonr.result;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -534,6 +531,68 @@ class ResultTest {
     @Test
     void taint_conditional_supplier_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().taint(val -> val > 0, val -> null));
+    }
+
+    @Test
+    void recover_supplier_returns_null() {
+        assertThrows(IllegalArgumentException.class, () -> newErr().recover(() -> null));
+    }
+
+    @Test
+    void recover_from_ok() {
+        var ok = newOk();
+        var recover = ok.recover(() -> -19);
+        assertNotSame(ok, recover);
+        assertEquals(ok.item, recover.item);
+    }
+
+    @Test
+    void recover_from_err() {
+        var err = newErr();
+        var recover = err.recover(() -> -19);
+        assertTrue(recover.isOk());
+        assertEquals(-19, recover.item);
+    }
+
+    @Test
+    void recover_null_arg() {
+        assertThrows(IllegalArgumentException.class, () -> newErr().recover(null));
+    }
+
+    @Test
+    void recover_conditional_from_ok() {
+        var ok = newOk();
+        var recover = ok.recover(Objects::nonNull, () -> -19);
+        assertNotSame(ok, recover);
+        assertEquals(ok.item, recover.item);
+    }
+
+    @Test
+    void recover_conditional_from_err_matched() {
+        var err = Result.err(new NumberFormatException("nan"));
+        var recover = err.recover(i -> i.getMessage().equals("nan"), () -> -19);
+        assertTrue(recover.isOk());
+        assertEquals(-19, recover.item);
+    }
+
+    @Test
+    void recover_conditional_from_err_not_matched() {
+        var err = Result.err(new NumberFormatException("nan"));
+        var recover = err.recover(i -> i.getMessage().equals("number"), () -> -19);
+        assertTrue(recover.isErr());
+        assertNotSame(err, recover);
+        assertSame(err.error, recover.error);
+    }
+
+    @Test
+    void recover_conditional_null_arg() {
+        assertThrows(IllegalArgumentException.class, () -> newErr().recover(null, null));
+        assertThrows(IllegalArgumentException.class, () -> newErr().recover(Objects::nonNull, null));
+    }
+
+    @Test
+    void recover_conditional_supplier_returns_null() {
+        assertThrows(IllegalArgumentException.class, () -> newErr().recover(Objects::nonNull, () -> null));
     }
 
     @Test
