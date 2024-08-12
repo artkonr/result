@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -529,19 +530,19 @@ class ResultTest {
     }
 
     @Test
-    void taint_conditional_supplier_returns_null() {
+    void taint_conditional_factory_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().taint(val -> val > 0, val -> null));
     }
 
     @Test
     void recover_supplier_returns_null() {
-        assertThrows(IllegalArgumentException.class, () -> newErr().recover(() -> null));
+        assertThrows(IllegalArgumentException.class, () -> newErr().recover(err -> null));
     }
 
     @Test
     void recover_from_ok() {
         var ok = newOk();
-        var recover = ok.recover(() -> -19);
+        var recover = ok.recover(err -> -19);
         assertNotSame(ok, recover);
         assertEquals(ok.item, recover.item);
     }
@@ -549,7 +550,7 @@ class ResultTest {
     @Test
     void recover_from_err() {
         var err = newErr();
-        var recover = err.recover(() -> -19);
+        var recover = err.recover(e -> -19);
         assertTrue(recover.isOk());
         assertEquals(-19, recover.item);
     }
@@ -562,7 +563,7 @@ class ResultTest {
     @Test
     void recover_conditional_from_ok() {
         var ok = newOk();
-        var recover = ok.recover(Objects::nonNull, () -> -19);
+        var recover = ok.recover(Objects::nonNull, err -> -19);
         assertNotSame(ok, recover);
         assertEquals(ok.item, recover.item);
     }
@@ -570,7 +571,7 @@ class ResultTest {
     @Test
     void recover_conditional_from_err_matched() {
         var err = Result.err(new NumberFormatException("nan"));
-        var recover = err.recover(i -> i.getMessage().equals("nan"), () -> -19);
+        var recover = err.recover(i -> i.getMessage().equals("nan"), er -> -19);
         assertTrue(recover.isOk());
         assertEquals(-19, recover.item);
     }
@@ -578,7 +579,7 @@ class ResultTest {
     @Test
     void recover_conditional_from_err_not_matched() {
         var err = Result.err(new NumberFormatException("nan"));
-        var recover = err.recover(i -> i.getMessage().equals("number"), () -> -19);
+        var recover = err.recover(i -> i.getMessage().equals("number"), er -> -19);
         assertTrue(recover.isErr());
         assertNotSame(err, recover);
         assertSame(err.error, recover.error);
@@ -586,13 +587,66 @@ class ResultTest {
 
     @Test
     void recover_conditional_null_arg() {
-        assertThrows(IllegalArgumentException.class, () -> newErr().recover(null, null));
+        assertThrows(IllegalArgumentException.class, () -> newErr().recover((Predicate<RuntimeException>) null, null));
         assertThrows(IllegalArgumentException.class, () -> newErr().recover(Objects::nonNull, null));
     }
 
     @Test
-    void recover_conditional_supplier_returns_null() {
-        assertThrows(IllegalArgumentException.class, () -> newErr().recover(Objects::nonNull, () -> null));
+    void recover_type_factory_returns_null() {
+        assertThrows(IllegalArgumentException.class, () -> newErr().recover(RuntimeException.class, err -> null));
+    }
+
+    @Test
+    void recover_type_from_ok() {
+        var ok = newOk();
+        var recover = ok.recover(RuntimeException.class, err -> -19);
+        assertNotSame(ok, recover);
+        assertEquals(ok.item, recover.item);
+    }
+
+    @Test
+    void recover_type_from_err_matched() {
+        var err = Result.err(new NumberFormatException("nan"));
+        var recover = err.recover(NumberFormatException.class, er -> -19);
+        assertTrue(recover.isOk());
+        assertEquals(-19, recover.item);
+    }
+
+    @Test
+    void recover_type_from_err_matched_broader() {
+        Result<Integer, RuntimeException> err = Result.err(new IllegalArgumentException("nan"));
+        var recover = err.recover(IllegalArgumentException.class, er -> -19);
+        assertTrue(recover.isOk());
+        assertEquals(-19, recover.item);
+    }
+
+    @Test
+    void recover_type_from_err_not_matched() {
+        Result<Integer, Exception> err = Result.err(new IOException("nan"));
+        var recover = err.recover(RuntimeException.class, er -> -19);
+        assertTrue(recover.isErr());
+        assertNotSame(err, recover);
+        assertSame(err.error, recover.error);
+    }
+
+    @Test
+    void recover_type_from_err_not_matched_broader() {
+        Result<Integer, RuntimeException> err = Result.err(new IllegalArgumentException("nan"));
+        var recover = err.recover(IllegalStateException.class, er -> -19);
+        assertTrue(recover.isErr());
+        assertNotSame(err, recover);
+        assertSame(err.error, recover.error);
+    }
+
+    @Test
+    void recover_type_null_arg() {
+        assertThrows(IllegalArgumentException.class, () -> newErr().recover((Class<? extends RuntimeException>) null, null));
+        assertThrows(IllegalArgumentException.class, () -> newErr().recover(RuntimeException.class, null));
+    }
+
+    @Test
+    void recover_conditional_factory_returns_null() {
+        assertThrows(IllegalArgumentException.class, () -> newErr().recover(Objects::nonNull, err -> null));
     }
 
     @Test
