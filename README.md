@@ -35,8 +35,7 @@ depencencies {
 The library is designed to offer a fluent functional-style API to interact with errors, very similarly to how the API of `java.util.Optional`:
 
 ```java
-import io.github.artkonr.result.Result;
-import io.github.artkonr.result.FlagResult;
+
 
 import java.io.IOException;
 
@@ -49,7 +48,7 @@ public void doingSomeWork() {
                     text -> createError(text)              // and make and error if it is not
             )
             .mapErr(generic -> wrapError(generic));        // wrap into a domain-specific error
-    
+
     // we can recover from errors by using fallbacks
     String getOrFallback = fallibleIO.unwrapOr("fallback");
 
@@ -68,8 +67,7 @@ public void doingSomeWork() {
 Of course, it is also possible to work in a more traditional way:
 
 ```java
-import io.github.artkonr.result.Result;
-import io.github.artkonr.result.FlagResult;
+
 
 import java.io.File;
 import java.io.IOException;
@@ -82,7 +80,7 @@ public void doingSomeWork() {
     } catch (IOException ex) {
         fallibleIO = Result.err(ex);
     }
-    
+
     if (fallibleIO.isOk()) {
         File okFile = fallibleIO.get();
         readFileContents(okFile);

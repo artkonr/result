@@ -7,10 +7,13 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class FlagResultTest {
+class FlagTest {
 
     @Test
     void from_err() {
@@ -57,6 +60,35 @@ class FlagResultTest {
     }
 
     @Test
+    void isErr_err() {
+        var res = FlagResult.err(new RuntimeException("abc"));
+        assertTrue(res.isErrAnd(RuntimeException.class));
+        assertTrue(res.isErrAnd(Exception.class));
+        assertFalse(res.isErrAnd(IllegalStateException.class));
+        assertTrue(res.isErrAnd(err -> err.getMessage().contains("abc")));
+        assertFalse(res.isErrAnd(err -> err.getMessage().contains("cde")));
+    }
+
+    @Test
+    void isErr_ok() {
+        var ok = FlagResult.ok();
+        assertFalse(ok.isErrAnd(RuntimeException.class));
+        assertFalse(ok.isErrAnd(err -> err.getMessage().contains("abc")));
+    }
+
+    @Test
+    void isErr_type_null_arg() {
+        assertThrows(IllegalArgumentException.class, () -> newErr().isErrAnd((Class<? extends Exception>) null));
+        assertThrows(IllegalArgumentException.class, () -> newErr().isErrAnd((Predicate<RuntimeException>) null));
+    }
+
+    @Test
+    void wrap_err_generic() {
+        var wrapped = FlagResult.wrap(() -> { throw new RuntimeException(); });
+        assertTrue(wrapped.isErr());
+    }
+
+    @Test
     void wrap_err() {
         var wrapped = FlagResult.wrap(IllegalStateException.class, () -> { throw new IllegalStateException(); });
         assertTrue(wrapped.isErr());
@@ -85,9 +117,17 @@ class FlagResultTest {
     }
 
     @Test
+    void wrap_ok_generic() {
+        AtomicInteger counter = new AtomicInteger();
+        var wrapped = FlagResult.wrap(() -> counter.set(100));
+        assertTrue(wrapped.isOk());
+    }
+
+    @Test
     void wrap_null_args() {
         assertThrows(IllegalArgumentException.class, () -> FlagResult.wrap(null, null));
         assertThrows(IllegalArgumentException.class, () -> FlagResult.wrap(RuntimeException.class, null));
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.wrap(null));
     }
 
     @Test
@@ -235,8 +275,19 @@ class FlagResultTest {
     }
 
     @Test
+    void populate_factory_ok() {
+        var flag = FlagResult.ok();
+        var populated = flag.populate(() -> "value");
+
+        assertTrue(populated.isOk());
+        assertEquals("value", populated.get());
+    }
+
+    @Test
     void populate_null_arg() {
         assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().populate(null));
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().populate((Supplier<?>) null));
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().populate(() -> null));
     }
 
     @Test
@@ -411,6 +462,45 @@ class FlagResultTest {
     }
 
     @Test
+    void peekErr_ok() {
+        var ok = FlagResult.ok();
+        AtomicInteger cc = new AtomicInteger();
+        var aft = ok.peekErr(ex -> cc.incrementAndGet());
+        assertSame(ok, aft);
+        assertEquals(0, cc.get());
+    }
+
+    @Test
+    void peekErr_err() {
+        var ok = FlagResult.err(new RuntimeException("abc"));
+        AtomicInteger cc = new AtomicInteger();
+        var aft = ok
+                .peekErr(ex -> cc.incrementAndGet())
+                .peekErr(RuntimeException.class, ex -> cc.incrementAndGet())
+                .peekErr(Exception.class, ex -> cc.incrementAndGet())
+                .peekErr(IllegalStateException.class, ex -> cc.incrementAndGet())
+                .peekErr(
+                        ex -> ex.getMessage().contains("abc"),
+                        ex -> cc.incrementAndGet()
+                )
+                .peekErr(
+                        ex -> ex.getMessage().contains("def"),
+                        ex -> cc.incrementAndGet()
+                );
+        assertSame(ok, aft);
+        assertEquals(4, cc.get());
+    }
+
+    @Test
+    void peekErr_null_arg() {
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().peekErr(null));
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().peekErr((Class<? extends Exception>) null, null));
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().peekErr(Exception.class, null));
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().peekErr((Predicate<Exception>) null, null));
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().peekErr(ex -> ex instanceof RuntimeException, null));
+    }
+
+    @Test
     void hash_code_ok() {
         var result = FlagResult.ok();
         assertEquals(31, result.hashCode());
@@ -552,5 +642,4 @@ class FlagResultTest {
     private static FlagResult<RuntimeException> newErr() {
         return new FlagResult<>(new RuntimeException());
     }
-
 }
