@@ -24,6 +24,29 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
     /**
      * Runs a specified {@link Wrap.Supplier}, catches an expected exception
      *  and returns it as a {@link Result}.
+     * <p>The expected exception can be any {@link Exception} type.
+     * <p>If no error is thrown by the supplied function, the call
+     *  resolves to {@code OK}.
+     * @param action fallible action
+     * @return result of the invocation
+     * @param <V> item type
+     * @throws IllegalArgumentException if either of the arguments not provided
+     *  or if the action returns a {@code null} value
+     */
+    public static <V> Result<V, Exception> wrap(@NonNull Wrap.Supplier<V> action) {
+        V val;
+        try {
+            val = action.get();
+        } catch (Exception ex) {
+            return Result.err(ex);
+        }
+
+        return Result.ok(val);
+    }
+
+    /**
+     * Runs a specified {@link Wrap.Supplier}, catches an expected exception
+     *  and returns it as a {@link Result}.
      * <p>The expected exception can be any {@link Exception} type,
      *  this method internally checks if the caught exception type
      *  matches the expected type or its subtype. Normally, the client
@@ -41,10 +64,10 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
      *  of an expected type or its subtype
      */
     public static <V, E extends Exception> Result<V, E> wrap(@NonNull Class<E> errType,
-                                                             @NonNull Wrap.Supplier<V> action) {
+                                                             @NonNull Wrap.Supplier<@NonNull V> action) {
+        V item;
         try {
-            V item = action.get();
-            return Result.ok(item);
+            item = action.get();
         } catch (Exception exception) {
             if (errType.isAssignableFrom(exception.getClass())) {
                 @SuppressWarnings("unchecked")
@@ -54,6 +77,8 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
                 throw BaseResult.unexpectedWrappedException(errType, exception);
             }
         }
+
+        return Result.ok(item);
     }
 
     /**
@@ -178,6 +203,18 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
     }
 
     /**
+     * Checks if {@code this} instance is {@code OK}
+     *  and the specified predicate holds.
+     * @param predicate predicate
+     * @return {@code true} if {@code this} is an {@code OK}
+     *  result and the predicate holds
+     * @throws IllegalArgumentException if no argument provided
+     */
+    public boolean isOkAnd(@NonNull Predicate<V> predicate) {
+        return isOk() && predicate.test(item);
+    }
+
+    /**
      * Attempts to get {@code OK} state or throws
      *  if {@code this} instance is {@code ERR}.
      * @return {@code OK} item
@@ -288,6 +325,88 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
         return rule.takeError(this, another)
                 .<Result<V, E>>map(Result::err)
                 .orElseGet(() -> Result.ok(this.item));
+    }
+
+    /**
+     * Inspects the {@code OK} state using the specified function,
+     *  if {@code this} instance is {@code OK}.
+     * @param consumer inspection function
+     * @return {@code this} instance
+     * @throws IllegalArgumentException if no argument provided
+     */
+    public Result<V, E> peek(@NonNull Consumer<V> consumer) {
+        if (isOk()) {
+            consumer.accept(item);
+        }
+
+        return this;
+    }
+
+    /**
+     * Inspects the {@code OK} state using the specified function,
+     *  if {@code this} instance is {@code OK} and is of the specified type.
+     * @param predicate predicate
+     * @param consumer inspection function
+     * @return {@code this} instance
+     * @throws IllegalArgumentException if either of the arguments provided
+     */
+    public Result<V, E> peek(@NonNull Predicate<V> predicate,
+                             @NonNull Consumer<V> consumer) {
+        if (isOkAnd(predicate)) {
+            consumer.accept(item);
+        }
+
+        return this;
+    }
+
+    /**
+     * Inspects the {@code ERR} state using the specified function,
+     *  if {@code this} instance is {@code ERR}.
+     * @param consumer inspection function
+     * @return {@code this} instance
+     * @throws IllegalArgumentException if no argument provided
+     */
+    public Result<V, E> peekErr(@NonNull Consumer<E> consumer) {
+        if (isErr()) {
+            consumer.accept(error);
+        }
+
+        return this;
+    }
+
+    /**
+     * Inspects the {@code ERR} state using the specified function,
+     *  if {@code this} instance is {@code ERR} and is of the specified type.
+     * @param type expected type
+     * @param consumer inspection function
+     * @return {@code this} instance
+     * @throws IllegalArgumentException if either of the arguments provided
+     */
+    public Result<V, E> peekErr(@NonNull Class<? extends Exception> type,
+                                @NonNull Consumer<E> consumer) {
+        if (isErrAnd(type)) {
+            consumer.accept(error);
+        }
+
+        return this;
+    }
+
+    /**
+     * Inspects the {@code ERR} state using the specified function,
+     *  if {@code this} instance is {@code ERR} and the provided
+     *  predicate holds.
+     * @param predicate predicate
+     * @param consumer inspection function
+     * @return {@code this} instance
+     * @throws IllegalArgumentException if either of the arguments provided
+     */
+    public Result<V, E> peekErr(@NonNull Predicate<E> predicate,
+                                @NonNull Consumer<E> consumer) {
+        if (isErrAnd(predicate)) {
+            consumer.accept(error);
+        }
+
+        return this;
     }
 
     /**

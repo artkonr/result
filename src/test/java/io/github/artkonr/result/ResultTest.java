@@ -10,8 +10,14 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ResultTest {
+    @Test
+    void wrap_err_generic() {
+        var wrapped = Result.wrap(() -> { throw new RuntimeException(); });
+        assertTrue(wrapped.isErr());
+    }
 
     @Test
     void wrap_err() {
@@ -35,6 +41,13 @@ class ResultTest {
     }
 
     @Test
+    void wrap_ok_generic() {
+        Result<Integer, Exception> wrapped = Result.wrap(() -> 1);
+        assertTrue(wrapped.isOk());
+        assertEquals(1, wrapped.item);
+    }
+
+    @Test
     void wrap_ok() {
         Result<Integer, IllegalStateException> wrapped = Result.wrap(IllegalStateException.class, () -> 1);
         assertTrue(wrapped.isOk());
@@ -45,6 +58,9 @@ class ResultTest {
     void wrap_null_args() {
         assertThrows(IllegalArgumentException.class, () -> Result.wrap(null, null));
         assertThrows(IllegalArgumentException.class, () -> Result.wrap(RuntimeException.class, null));
+        assertThrows(IllegalArgumentException.class, () -> Result.wrap(RuntimeException.class, () -> null));
+        assertThrows(IllegalArgumentException.class, () -> Result.wrap(null));
+        assertThrows(IllegalArgumentException.class, () -> Result.wrap(() -> null));
     }
 
     @Test
@@ -87,6 +103,24 @@ class ResultTest {
     @Test
     void ok_null_arg() {
         assertThrows(IllegalArgumentException.class, () -> Result.ok(null));
+    }
+
+    @Test
+    void isOkAnd_ok() {
+        var ok = Result.ok(10);
+        assertTrue(ok.isOkAnd(val -> val > 5));
+        assertFalse(ok.isOkAnd(val -> val > 10));
+    }
+
+    @Test
+    void isOkAnd_err() {
+        var err = newErr();
+        assertFalse(err.isOkAnd(val -> val > 5));
+    }
+
+    @Test
+    void isOk_null_arg() {
+        assertThrows(IllegalArgumentException.class, () -> newOk().isOkAnd(null));
     }
 
     @Test
@@ -361,6 +395,76 @@ class ResultTest {
         assertThrows(IllegalArgumentException.class, () -> newOk().fuse((BaseResult<RuntimeException>) null));
         assertThrows(IllegalArgumentException.class, () -> newOk().fuse((BaseResult<RuntimeException>) null, null));
         assertThrows(IllegalArgumentException.class, () -> newOk().fuse(FlagResult.ok(), null));
+    }
+
+    @Test
+    void peek_ok() {
+        var ok = Result.ok(10);
+        AtomicInteger cc = new AtomicInteger();
+        var aft = ok
+                .peek(val -> cc.incrementAndGet())
+                .peek(val -> val > 5, val -> cc.incrementAndGet())
+                .peek(val -> val > 20, val -> cc.incrementAndGet());
+        assertSame(ok, aft);
+        assertEquals(2, cc.get());
+    }
+
+    @Test
+    void peek_err() {
+        var err = newErr();
+        AtomicInteger cc = new AtomicInteger();
+        var aft = err
+                .peek(val -> cc.incrementAndGet())
+                .peek(val -> val > 5, val -> cc.incrementAndGet())
+                .peek(val -> val > 20, val -> cc.incrementAndGet());
+        assertSame(err, aft);
+        assertEquals(0, cc.get());
+    }
+
+    @Test
+    void peek_null_arg() {
+        assertThrows(IllegalArgumentException.class, () -> newOk().peek(null));
+        assertThrows(IllegalArgumentException.class, () -> newOk().peek(null, null));
+        assertThrows(IllegalArgumentException.class, () -> newOk().peek(val -> val > 1, null));
+    }
+
+    @Test
+    void peekErr_ok() {
+        var ok = newOk();
+        AtomicInteger cc = new AtomicInteger();
+        var aft = ok.peekErr(ex -> cc.incrementAndGet());
+        assertSame(ok, aft);
+        assertEquals(0, cc.get());
+    }
+
+    @Test
+    void peekErr_err() {
+        var ok = Result.err(new RuntimeException("abc"));
+        AtomicInteger cc = new AtomicInteger();
+        var aft = ok
+                .peekErr(ex -> cc.incrementAndGet())
+                .peekErr(RuntimeException.class, ex -> cc.incrementAndGet())
+                .peekErr(Exception.class, ex -> cc.incrementAndGet())
+                .peekErr(IllegalStateException.class, ex -> cc.incrementAndGet())
+                .peekErr(
+                        ex -> ex.getMessage().contains("abc"),
+                        ex -> cc.incrementAndGet()
+                )
+                .peekErr(
+                        ex -> ex.getMessage().contains("def"),
+                        ex -> cc.incrementAndGet()
+                );
+        assertSame(ok, aft);
+        assertEquals(4, cc.get());
+    }
+
+    @Test
+    void peekErr_null_arg() {
+        assertThrows(IllegalArgumentException.class, () -> newOk().peekErr(null));
+        assertThrows(IllegalArgumentException.class, () -> newOk().peekErr((Class<? extends Exception>) null, null));
+        assertThrows(IllegalArgumentException.class, () -> newOk().peekErr(Exception.class, null));
+        assertThrows(IllegalArgumentException.class, () -> newOk().peekErr((Predicate<RuntimeException>) null, null));
+        assertThrows(IllegalArgumentException.class, () -> newOk().peekErr(ex -> ex instanceof RuntimeException, null));
     }
 
     @Test
