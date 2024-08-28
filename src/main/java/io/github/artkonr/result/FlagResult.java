@@ -5,7 +5,9 @@ import lombok.NonNull;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -13,6 +15,25 @@ import java.util.function.Supplier;
  * @param <E> error type
  */
 public class FlagResult<E extends Exception> extends BaseResult<E> {
+
+    /**
+     * Runs a specified {@link Wrap.Runnable}, catches an expected exception
+     *  and returns it as a {@link FlagResult}.
+     * <p>The expected exception can be any {@link Exception} type.
+     * <p>If no error is thrown by the supplied function, the call
+     *  resolves to {@code OK}.
+     * @param action fallible action
+     * @return result of the invocation
+     * @throws IllegalArgumentException if either of the arguments not provided
+     */
+    public static FlagResult<Exception> wrap(@NonNull Wrap.Runnable action) {
+        try {
+            action.run();
+            return FlagResult.ok();
+        } catch (Exception x) {
+            return FlagResult.err(x);
+        }
+    }
 
     /**
      * Runs a specified {@link Wrap.Runnable}, catches an expected exception
@@ -142,7 +163,7 @@ public class FlagResult<E extends Exception> extends BaseResult<E> {
     /**
      * Converts {@code this} {@link FlagResult} into a {@link Result
      *  value result} with a given item if {@code this} result is
-     *  {@code OK}; simply carriers internal error state otherwise.
+     *  {@code OK}; simply carries internal error state otherwise.
      * @param item item to populate the result with
      * @return new {@link Result} instance
      * @param <V> type of {@code OK} item
@@ -154,6 +175,20 @@ public class FlagResult<E extends Exception> extends BaseResult<E> {
         } else {
             return Result.err(error);
         }
+    }
+
+    /**
+     * Converts {@code this} {@link FlagResult} into a {@link Result
+     *  value result} using a given factory if {@code this} result is
+     *  {@code OK}; simply carries internal error state otherwise.
+     * @param factory item factory to populate the result with
+     * @return new {@link Result} instance
+     * @param <V> type of {@code OK} item
+     * @throws IllegalArgumentException if no argument provided or
+     *  if the factory returns a {@code null} object
+     */
+    public <V> Result<V, E> populate(@NonNull Supplier<V> factory) {
+        return populate(factory.get());
     }
 
     /**
@@ -196,6 +231,56 @@ public class FlagResult<E extends Exception> extends BaseResult<E> {
         return rule.takeError(this, another)
                 .map(FlagResult::err)
                 .orElseGet(FlagResult::ok);
+    }
+
+    /**
+     * Inspects the {@code ERR} state using the specified function,
+     *  if {@code this} instance is {@code ERR}.
+     * @param consumer inspection function
+     * @return {@code this} instance
+     * @throws IllegalArgumentException if no argument provided
+     */
+    public FlagResult<E> peekErr(@NonNull Consumer<E> consumer) {
+        if (isErr()) {
+            consumer.accept(error);
+        }
+
+        return this;
+    }
+
+    /**
+     * Inspects the {@code ERR} state using the specified function,
+     *  if {@code this} instance is {@code ERR} and is of the specified type.
+     * @param type expected type
+     * @param consumer inspection function
+     * @return {@code this} instance
+     * @throws IllegalArgumentException if either of the arguments provided
+     */
+    public FlagResult<E> peekErr(@NonNull Class<? extends Exception> type,
+                                 @NonNull Consumer<E> consumer) {
+        if (isErrAnd(type)) {
+            consumer.accept(error);
+        }
+
+        return this;
+    }
+
+    /**
+     * Inspects the {@code ERR} state using the specified function,
+     *  if {@code this} instance is {@code ERR} and the provided
+     *  predicate holds.
+     * @param predicate predicate
+     * @param consumer inspection function
+     * @return {@code this} instance
+     * @throws IllegalArgumentException if either of the arguments provided
+     */
+    public FlagResult<E> peekErr(@NonNull Predicate<E> predicate,
+                                 @NonNull Consumer<E> consumer) {
+        if (isErrAnd(predicate)) {
+            consumer.accept(error);
+        }
+
+        return this;
     }
 
     /**

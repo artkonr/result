@@ -4,17 +4,19 @@ import lombok.NonNull;
 
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
  * An abstract result container that suggests that there
- *  is an operation that concludes OK or as an error.
+ *  is an operation that concludes OK or as an error. Suited
+ *  for catching and propagating errors in a functional style.
  * <p>Two principal states are managed by this entity:
  * <ol>
  *     <li>{@code OK} - stands for a successful completion;</li>
  *     <li>{@code ERR} - stands for an errored completion.</li>
  * </ol>
- * <p>Implementation decide what constitutes an {@code OK} result,
+ * <p>Implementations decide what constitutes an {@code OK} result,
  *  but the {@code ERR} result is enforced by this class: an error
  *  result is always backed by a generified {@link Exception}.
  * @param <E> type of exception held by the ERR result.
@@ -43,6 +45,31 @@ public abstract class BaseResult<E extends Exception> {
      */
     public final boolean isErr() {
         return error != null;
+    }
+
+    /**
+     * Checks if {@code this} instance is {@code ERR}
+     *  and the underlying error is of the specified
+     *  type or its subclass.
+     * @param type expected type
+     * @return {@code true} if {@code this} is an {@code ERR}
+     *  result and the predicate holds
+     * @throws IllegalArgumentException if no argument provided
+     */
+    public final boolean isErrAnd(@NonNull Class<? extends Exception> type) {
+        return isErr() && type.isAssignableFrom(error.getClass());
+    }
+
+    /**
+     * Checks if {@code this} instance is {@code ERR}
+     *  and the specified predicate holds.
+     * @param predicate predicate
+     * @return {@code true} if {@code this} is an {@code ERR}
+     *  result and the predicate holds
+     * @throws IllegalArgumentException if no argument provided
+     */
+    public final boolean isErrAnd(@NonNull Predicate<E> predicate) {
+        return isErr() && predicate.test(error);
     }
 
     /**
