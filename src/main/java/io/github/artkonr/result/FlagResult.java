@@ -322,6 +322,25 @@ public class FlagResult<E extends Exception> extends BaseResult<E> {
     }
 
     /**
+     * Converts an {@code OK} result into {@code ERR}
+     *  using the specified factory if {@code this}
+     *  instance is {@code OK}. Recreates {@code this}
+     *  with its internal error state otherwise.
+     * @param factory exception factory
+     * @return converted instance
+     * @throws IllegalArgumentException if no argument provided or if
+     *  the factory function returns {@code null}
+     */
+    @Override
+    public FlagResult<E> taintMatching(@NonNull Supplier<E> factory) {
+        if (isOk()) {
+            return err(factory.get());
+        } else {
+            return err(error);
+        }
+    }
+
+    /**
      * Wraps the internal {@code ERR} state into a {@link
      *  Failure wrapping exception} and throws if {@code
      *  this} instance is an {@code ERR}.

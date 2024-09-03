@@ -95,7 +95,7 @@ public abstract class BaseResult<E extends Exception> {
      * @throws IllegalArgumentException if no argument provided or
      *  if the callback function returns {@code null}
      */
-    public abstract <N extends Exception> BaseResult<N> mapErr(Function<E, N> remap);
+    public abstract <N extends Exception> BaseResult<N> mapErr(@NonNull Function<E, N> remap);
 
     /**
      * Converts an {@code OK} result into {@code ERR}
@@ -107,7 +107,17 @@ public abstract class BaseResult<E extends Exception> {
      * @param factory exception factory
      * @return converted result
      */
-    public abstract BaseResult<Exception> taint(Supplier<? extends Exception> factory);
+    public abstract BaseResult<Exception> taint(@NonNull Supplier<? extends Exception> factory);
+
+    /**
+     * Converts an {@code OK} result into {@code ERR}
+     *  using the specified factory if {@code this}
+     *  instance is {@code OK}. Recreates {@code this}
+     *  with its internal error state otherwise.
+     * @param factory exception factory
+     * @return converted result
+     */
+    public abstract BaseResult<E> taintMatching(@NonNull Supplier<E> factory);
 
     /**
      * Performs the specified callback if {@code this}

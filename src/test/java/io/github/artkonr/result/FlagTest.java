@@ -321,6 +321,36 @@ class FlagTest {
     }
 
     @Test
+    void taint_matching_from_ok() {
+        RuntimeException ex = new IllegalArgumentException();
+        var ok = FlagResult.ok();
+        var tainted = ok.taintMatching(() -> ex);
+        assertTrue(tainted.isErr());
+        assertEquals(ex, tainted.error);
+    }
+
+    @Test
+    void taint_matching_from_err() {
+        RuntimeException ex1 = new RuntimeException();
+        RuntimeException ex2 = new RuntimeException();
+        var err = FlagResult.err(ex1);
+        var tainted = err.taintMatching(() -> ex2);
+        assertTrue(tainted.isErr());
+        assertNotSame(err, tainted);
+        assertNotEquals(ex1, ex2);
+    }
+
+    @Test
+    void taint_matching_null_arg() {
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().taintMatching(null));
+    }
+
+    @Test
+    void taint_matching_remapper_returns_null() {
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().taintMatching(() -> null));
+    }
+
+    @Test
     void fuse_both_err() {
         RuntimeException ex1 = new RuntimeException();
         RuntimeException ex2 = new IllegalArgumentException();
