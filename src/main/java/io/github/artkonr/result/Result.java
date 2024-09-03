@@ -512,6 +512,23 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
     /**
      * Converts an {@code OK} result into {@code ERR}
      *  using the specified factory if {@code this}
+     *  instance is {@code OK}. Recreates {@code this}
+     *  with its internal error state otherwise.
+     * @param factory exception factory
+     * @return converted result
+     */
+    @Override
+    public Result<V, E> taintMatching(@NonNull Supplier<E> factory) {
+        if (isOk()) {
+            return err(factory.get());
+        } else {
+            return err(error);
+        }
+    }
+
+    /**
+     * Converts an {@code OK} result into {@code ERR}
+     *  using the specified factory if {@code this}
      *  instance is {@code OK} and if the provided
      *  {@link Predicate} invoked on the item holds.
      * <p>If the predicate does not hold, returns the
@@ -528,6 +545,34 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
      */
     public Result<V, Exception> taint(@NonNull Predicate<V> condition,
                                       @NonNull Function<V, ? extends Exception> factory) {
+        if (isOk()) {
+            if (condition.test(item)) {
+                return err(factory.apply(item));
+            } else {
+                return ok(item);
+            }
+        } else {
+            return err(error);
+        }
+    }
+
+    /**
+     * Converts an {@code OK} result into {@code ERR}
+     *  using the specified factory if {@code this}
+     *  instance is {@code OK} and if the provided
+     *  {@link Predicate} invoked on the item holds.
+     * <p>If the predicate does not hold, returns the
+     *  recreated {@code OK} item.
+     * <p>If {@code this} is {@code ERR}, recreates itself
+     *  with the internal error state.
+     * @param condition conversion predicate
+     * @param factory exception factory
+     * @return converted instance
+     * @throws IllegalArgumentException if either of the arguments not
+     *  provided or if the factory function returns {@code null}
+     */
+    public Result<V, E> taintMatching(@NonNull Predicate<V> condition,
+                                      @NonNull Function<V, E> factory) {
         if (isOk()) {
             if (condition.test(item)) {
                 return err(factory.apply(item));

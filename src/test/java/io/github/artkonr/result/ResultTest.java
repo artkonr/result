@@ -604,6 +604,31 @@ class ResultTest {
     }
 
     @Test
+    void taint_matching_ok() {
+        var ok = newOk();
+        var tainted = ok.taintMatching(IllegalStateException::new);
+        assertTrue(ok.isOk());
+    }
+
+    @Test
+    void taint_matching_err() {
+        Result<Integer, RuntimeException> err = newErr();
+        Result<Integer, RuntimeException> tainted = err.taintMatching(RuntimeException::new);
+        assertTrue(err.isErr());
+        assertSame(err.error, tainted.error);
+    }
+
+    @Test
+    void taint_matching_null_arg() {
+        assertThrows(IllegalArgumentException.class, () -> newErr().taintMatching(null));
+    }
+
+    @Test
+    void taint_matching_supplier_returns_null() {
+        assertThrows(IllegalArgumentException.class, () -> newOk().taintMatching(() -> null));
+    }
+
+    @Test
     void taint_conditional_matched_ok() {
         var ok = newOk();
         var tainted = ok.taint(val -> val > 0, val -> new NumberFormatException());
@@ -636,6 +661,41 @@ class ResultTest {
     @Test
     void taint_conditional_factory_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().taint(val -> val > 0, val -> null));
+    }
+
+    @Test
+    void taint_matching_conditional_matched_ok() {
+        var ok = newOk();
+        var tainted = ok.taintMatching(val -> val > 0, val -> new NumberFormatException());
+        assertTrue(tainted.isErr());
+        assertInstanceOf(NumberFormatException.class, tainted.error);
+    }
+
+    @Test
+    void taint_matching_conditional_not_matched_ok() {
+        var ok = newOk();
+        var tainted = ok.taintMatching(val -> val < 0, val -> new NumberFormatException());
+        assertTrue(tainted.isOk());
+        assertEquals(ok.item, tainted.item);
+    }
+
+    @Test
+    void taint_matching_conditional_err() {
+        var err = newErr();
+        var tainted = err.taintMatching(val -> val > 0, val -> new NumberFormatException());
+        assertTrue(tainted.isErr());
+        assertSame(err.error, tainted.error);
+    }
+
+    @Test
+    void taint_matching_conditional_null_arg() {
+        assertThrows(IllegalArgumentException.class, () -> newOk().taintMatching(null, null));
+        assertThrows(IllegalArgumentException.class, () -> newOk().taintMatching(val -> val > 0, null));
+    }
+
+    @Test
+    void taint_matching_conditional_factory_returns_null() {
+        assertThrows(IllegalArgumentException.class, () -> newOk().taintMatching(val -> val > 0, val -> null));
     }
 
     @Test
