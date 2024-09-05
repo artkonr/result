@@ -220,6 +220,25 @@ class FlagTest {
     }
 
     @Test
+    void unwrap_checked_ok() {
+        var ok = FlagResult.ok();
+        assertDoesNotThrow(ok::unwrapChecked);
+    }
+
+    @Test
+    void unwrap_checked_err() {
+        RuntimeException ex = new RuntimeException();
+        var err = FlagResult.err(ex);
+        assertThrows(RuntimeException.class, err::unwrapChecked);
+        try {
+            err.unwrapChecked();
+        } catch (Exception x) {
+            assertNull(x.getCause());
+            assertSame(ex, x);
+        }
+    }
+
+    @Test
     void mapErr_null_arg() {
         assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().mapErr(null));
     }
@@ -321,33 +340,33 @@ class FlagTest {
     }
 
     @Test
-    void taint_matching_from_ok() {
+    void fork_from_ok() {
         RuntimeException ex = new IllegalArgumentException();
         var ok = FlagResult.ok();
-        var tainted = ok.taintMatching(() -> ex);
+        var tainted = ok.fork(() -> ex);
         assertTrue(tainted.isErr());
         assertEquals(ex, tainted.error);
     }
 
     @Test
-    void taint_matching_from_err() {
+    void fork_from_err() {
         RuntimeException ex1 = new RuntimeException();
         RuntimeException ex2 = new RuntimeException();
         var err = FlagResult.err(ex1);
-        var tainted = err.taintMatching(() -> ex2);
+        var tainted = err.fork(() -> ex2);
         assertTrue(tainted.isErr());
         assertNotSame(err, tainted);
         assertNotEquals(ex1, ex2);
     }
 
     @Test
-    void taint_matching_null_arg() {
-        assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().taintMatching(null));
+    void fork_null_arg() {
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().fork(null));
     }
 
     @Test
-    void taint_matching_remapper_returns_null() {
-        assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().taintMatching(() -> null));
+    void fork_remapper_returns_null() {
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().fork(() -> null));
     }
 
     @Test

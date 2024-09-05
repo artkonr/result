@@ -518,7 +518,7 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
      * @return converted result
      */
     @Override
-    public Result<V, E> taintMatching(@NonNull Supplier<E> factory) {
+    public Result<V, E> fork(@NonNull Supplier<E> factory) {
         if (isOk()) {
             return err(factory.get());
         } else {
@@ -571,8 +571,8 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
      * @throws IllegalArgumentException if either of the arguments not
      *  provided or if the factory function returns {@code null}
      */
-    public Result<V, E> taintMatching(@NonNull Predicate<V> condition,
-                                      @NonNull Function<V, E> factory) {
+    public Result<V, E> fork(@NonNull Predicate<V> condition,
+                             @NonNull Function<V, E> factory) {
         if (isOk()) {
             if (condition.test(item)) {
                 return err(factory.apply(item));
@@ -712,6 +712,21 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
             return item;
         } else {
             throw new Failure(error);
+        }
+    }
+
+    /**
+     * Returns {@code OK} item if {@code this} instance
+     *  is an {@code OK} result. Throws the internal {@code ERR}
+     *  state otherwise.
+     * @return item
+     * @throws E result exception
+     */
+    public V unwrapChecked() throws E {
+        if (isOk()) {
+            return item;
+        } else {
+            throw error;
         }
     }
 

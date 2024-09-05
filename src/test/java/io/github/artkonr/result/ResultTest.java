@@ -604,28 +604,28 @@ class ResultTest {
     }
 
     @Test
-    void taint_matching_ok() {
+    void fork_ok() {
         var ok = newOk();
-        var tainted = ok.taintMatching(IllegalStateException::new);
+        var tainted = ok.fork(IllegalStateException::new);
         assertTrue(ok.isOk());
     }
 
     @Test
-    void taint_matching_err() {
+    void fork_err() {
         Result<Integer, RuntimeException> err = newErr();
-        Result<Integer, RuntimeException> tainted = err.taintMatching(RuntimeException::new);
+        Result<Integer, RuntimeException> tainted = err.fork(RuntimeException::new);
         assertTrue(err.isErr());
         assertSame(err.error, tainted.error);
     }
 
     @Test
-    void taint_matching_null_arg() {
-        assertThrows(IllegalArgumentException.class, () -> newErr().taintMatching(null));
+    void fork_null_arg() {
+        assertThrows(IllegalArgumentException.class, () -> newErr().fork(null));
     }
 
     @Test
-    void taint_matching_supplier_returns_null() {
-        assertThrows(IllegalArgumentException.class, () -> newOk().taintMatching(() -> null));
+    void fork_supplier_returns_null() {
+        assertThrows(IllegalArgumentException.class, () -> newOk().fork(() -> null));
     }
 
     @Test
@@ -664,38 +664,38 @@ class ResultTest {
     }
 
     @Test
-    void taint_matching_conditional_matched_ok() {
+    void fork_conditional_matched_ok() {
         var ok = newOk();
-        var tainted = ok.taintMatching(val -> val > 0, val -> new NumberFormatException());
+        var tainted = ok.fork(val -> val > 0, val -> new NumberFormatException());
         assertTrue(tainted.isErr());
         assertInstanceOf(NumberFormatException.class, tainted.error);
     }
 
     @Test
-    void taint_matching_conditional_not_matched_ok() {
+    void fork_conditional_not_matched_ok() {
         var ok = newOk();
-        var tainted = ok.taintMatching(val -> val < 0, val -> new NumberFormatException());
+        var tainted = ok.fork(val -> val < 0, val -> new NumberFormatException());
         assertTrue(tainted.isOk());
         assertEquals(ok.item, tainted.item);
     }
 
     @Test
-    void taint_matching_conditional_err() {
+    void fork_conditional_err() {
         var err = newErr();
-        var tainted = err.taintMatching(val -> val > 0, val -> new NumberFormatException());
+        var tainted = err.fork(val -> val > 0, val -> new NumberFormatException());
         assertTrue(tainted.isErr());
         assertSame(err.error, tainted.error);
     }
 
     @Test
-    void taint_matching_conditional_null_arg() {
-        assertThrows(IllegalArgumentException.class, () -> newOk().taintMatching(null, null));
-        assertThrows(IllegalArgumentException.class, () -> newOk().taintMatching(val -> val > 0, null));
+    void fork_conditional_null_arg() {
+        assertThrows(IllegalArgumentException.class, () -> newOk().fork(null, null));
+        assertThrows(IllegalArgumentException.class, () -> newOk().fork(val -> val > 0, null));
     }
 
     @Test
-    void taint_matching_conditional_factory_returns_null() {
-        assertThrows(IllegalArgumentException.class, () -> newOk().taintMatching(val -> val > 0, val -> null));
+    void fork_conditional_factory_returns_null() {
+        assertThrows(IllegalArgumentException.class, () -> newOk().fork(val -> val > 0, val -> null));
     }
 
     @Test
@@ -940,6 +940,23 @@ class ResultTest {
             assertInstanceOf(Failure.class, ex);
             assertNotNull(ex.getCause());
             assertInstanceOf(NoSuchElementException.class, ex.getCause());
+        }
+    }
+
+    @Test
+    void unwrap_checked_ok() {
+        var ok = newOk();
+        assertDoesNotThrow(ok::unwrapChecked);
+        assertEquals(1, ok.unwrapChecked());
+    }
+
+    @Test
+    void unwrap_checked_err() {
+        try {
+            Result.err(new NoSuchElementException()).unwrapChecked();
+        } catch (Exception ex) {
+            assertInstanceOf(NoSuchElementException.class, ex);
+            assertNull(ex.getCause());
         }
     }
 

@@ -32,7 +32,7 @@ depencencies {
 
 ### Functional style
 
-The library is designed to offer a fluent functional-style API to interact with errors, very similarly to how the API of `java.util.Optional`:
+The library is designed to offer a fluent functional-style API to interact with errors, very similar to the API of `java.util.Optional`:
 
 ```java
 
@@ -51,8 +51,11 @@ public void doingSomeWork() {
 
     // we can recover from errors by using fallbacks
     String getOrFallback = fallibleIO.unwrapOr("fallback");
+    
+    // ... or recover without taking the value out 
+    Result<String, RuntimeException> maybeGoOnFromHere = fallibleIO.recover(err -> err.getMessage());
 
-    // or just go fingers-crossed
+    // ... or just go fingers-crossed
     String couldHurt = fallibleIO.unwrap();
 
     // if we don't care about the result value,
@@ -91,6 +94,18 @@ public void doingSomeWork() {
 }
 
 ```
+
+### State model
+
+Library API offers a variety of transformation methods, such as:
+
+* `map` / `mapErr` / `flatMap` - modify the internal state of the monad;
+* `fork` - OK -> error conversion, matching the error type;
+* `taint` - OK -> error conversion, broadening the error type;
+* `recover` - error -> OK conversion;
+* `peek` - fluent introspection on the state.
+* `fuse` / `join` - combining 2 or more results together, respectively;
+* `unwrap` - taking the value out of the monad and handling possible error.
 
 ## Building
 

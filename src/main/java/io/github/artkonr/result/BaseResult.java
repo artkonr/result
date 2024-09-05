@@ -9,7 +9,7 @@ import java.util.function.Supplier;
 
 /**
  * An abstract result container that suggests that there
- *  is an operation that concludes OK or as an error. Suited
+ *  is an operation that concludes OK or with an error. Suited
  *  for catching and propagating errors in a functional style.
  * <p>Two principal states are managed by this entity:
  * <ol>
@@ -88,7 +88,7 @@ public abstract class BaseResult<E extends Exception> {
     /**
      * Applies a callback function to convert the internal
      *  error state if {@code this} instance is {@code ERR};
-     *  returns a new {@code OK} otherwise.
+     *  returns a recreated {@code OK} otherwise.
      * @param remap callback
      * @return mapped result
      * @param <N> new error type
@@ -106,6 +106,8 @@ public abstract class BaseResult<E extends Exception> {
      *  to the most generic type supported: {@link Exception}.
      * @param factory exception factory
      * @return converted result
+     * @throws IllegalArgumentException if no argument provided
+     *  or if the factory returns a {@code null}
      */
     public abstract BaseResult<Exception> taint(@NonNull Supplier<? extends Exception> factory);
 
@@ -114,10 +116,16 @@ public abstract class BaseResult<E extends Exception> {
      *  using the specified factory if {@code this}
      *  instance is {@code OK}. Recreates {@code this}
      *  with its internal error state otherwise.
+     * <p>Contrary to {@link BaseResult#taint(Supplier) tainting},
+     *  this method implies that the type of the error
+     *  created by the factory matches the type of
+     *  {@code this} instance.
      * @param factory exception factory
      * @return converted result
+     * @throws IllegalArgumentException if no argument provided
+     *  or if the factory returns a {@code null}
      */
-    public abstract BaseResult<E> taintMatching(@NonNull Supplier<E> factory);
+    public abstract BaseResult<E> fork(@NonNull Supplier<E> factory);
 
     /**
      * Performs the specified callback if {@code this}
