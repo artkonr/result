@@ -14,48 +14,48 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ResultTest {
     @Test
-    void wrap_err_generic() {
+    void should_lossy_wrap_unknown_error() {
         var wrapped = Result.wrap(() -> { throw new RuntimeException(); });
         assertTrue(wrapped.isErr());
     }
 
     @Test
-    void wrap_err() {
+    void should_exact_wrap_known_error() {
         var wrapped = Result.wrap(IllegalStateException.class, () -> { throw new IllegalStateException(); });
         assertTrue(wrapped.isErr());
         assertInstanceOf(IllegalStateException.class, wrapped.error);
     }
 
     @Test
-    void wrap_err_checked() {
+    void should_exact_wrap_checked_error() {
         var wrapped = Result.wrap(IOException.class, () -> { throw new IOException(); });
         assertTrue(wrapped.isErr());
         assertInstanceOf(IOException.class, wrapped.error);
     }
 
     @Test
-    void wrap_err_subclass() {
+    void should_lossy_wrap_subclass_of_known_error() {
         Result<Integer, RuntimeException> wrapped = Result.wrap(RuntimeException.class, () -> { throw new IllegalStateException(); });
         assertTrue(wrapped.isErr());
         assertInstanceOf(IllegalStateException.class, wrapped.error);
     }
 
     @Test
-    void wrap_ok_generic() {
+    void should_lossy_wrap_as_ok_if_action_does_not_throw() {
         Result<Integer, Exception> wrapped = Result.wrap(() -> 1);
         assertTrue(wrapped.isOk());
         assertEquals(1, wrapped.item);
     }
 
     @Test
-    void wrap_ok() {
+    void should_exact_wrap_as_ok_if_action_does_not_throw() {
         Result<Integer, IllegalStateException> wrapped = Result.wrap(IllegalStateException.class, () -> 1);
         assertTrue(wrapped.isOk());
         assertEquals(1, wrapped.item);
     }
 
     @Test
-    void wrap_null_args() {
+    void should_throw_when_wrapping_if_null_arguments_provided() {
         assertThrows(IllegalArgumentException.class, () -> Result.wrap(null, null));
         assertThrows(IllegalArgumentException.class, () -> Result.wrap(RuntimeException.class, null));
         assertThrows(IllegalArgumentException.class, () -> Result.wrap(RuntimeException.class, () -> null));
@@ -64,7 +64,7 @@ class ResultTest {
     }
 
     @Test
-    void wrap_unexpected_error() {
+    void should_throw_if_exact_wrap_catches_unexpected_error() {
         assertThrows(IllegalStateException.class, () -> Result.wrap(
                 IllegalStateException.class,
                 () -> { throw new NoSuchElementException(); }
@@ -72,7 +72,7 @@ class ResultTest {
     }
 
     @Test
-    void from_err() {
+    void should_create_err_from_err() {
         var source = newErr();
         var copy = Result.from(source);
         assertTrue(copy.isErr());
@@ -80,7 +80,7 @@ class ResultTest {
     }
 
     @Test
-    void from_ok() {
+    void should_create_ok_from_ok() {
         var source = newOk();
         var copy = Result.from(source);
         assertTrue(copy.isOk());
@@ -88,12 +88,12 @@ class ResultTest {
     }
 
     @Test
-    void from_null_arg() {
+    void should_throw_if_created_from_null() {
         assertThrows(IllegalArgumentException.class, () -> Result.from(null));
     }
 
     @Test
-    void ok() {
+    void should_create_ok() {
         var ok = newOk();
         assertTrue(ok.isOk());
         assertFalse(ok.isErr());
@@ -101,42 +101,42 @@ class ResultTest {
     }
 
     @Test
-    void ok_null_arg() {
+    void should_throw_when_creating_ok_with_null() {
         assertThrows(IllegalArgumentException.class, () -> Result.ok(null));
     }
 
     @Test
-    void isOkAnd_ok() {
+    void should_evaluate_as_ok_if_ok() {
         var ok = Result.ok(10);
         assertTrue(ok.isOkAnd(val -> val > 5));
         assertFalse(ok.isOkAnd(val -> val > 10));
     }
 
     @Test
-    void isOkAnd_err() {
+    void should_not_evaluate_as_ok_if_err() {
         var err = newErr();
         assertFalse(err.isOkAnd(val -> val > 5));
     }
 
     @Test
-    void isOk_null_arg() {
+    void should_throw_if_evaluating_with_null_predicate() {
         assertThrows(IllegalArgumentException.class, () -> newOk().isOkAnd(null));
     }
 
     @Test
-    void err() {
+    void should_create_err() {
         var err = newErr();
         assertTrue(err.isErr());
         assertFalse(err.isOk());
     }
 
     @Test
-    void err_null_arg() {
+    void should_throw_when_creating_err_with_null() {
         assertThrows(IllegalArgumentException.class, () -> Result.err(null));
     }
 
     @Test
-    void join_all_ok() {
+    void should_join_into_ok_if_all_ok() {
         List<Result<Integer, RuntimeException>> results = List.of(
                 newOk(),
                 newOk()
@@ -147,7 +147,7 @@ class ResultTest {
     }
 
     @Test
-    void join_1_err() {
+    void should_join_into_err_if_at_least_one_err() {
         List<Result<Integer, RuntimeException>> results = List.of(
                 newOk(),
                 newErr()
@@ -157,18 +157,18 @@ class ResultTest {
     }
 
     @Test
-    void join_null_arg() {
+    void should_throw_if_joining_null_collection() {
         assertThrows(IllegalArgumentException.class, () -> Result.join(null));
     }
 
     @Test
-    void join_with_rule_null_arg() {
+    void should_throw_if_joining_with_null_rule() {
         assertThrows(IllegalArgumentException.class, () -> Result.join(null, null));
         assertThrows(IllegalArgumentException.class, () -> Result.join(List.of(), null));
     }
 
     @Test
-    void join_with_rule_take_head() {
+    void should_join_with_rule_into_err_with_first_encountered_error() {
         RuntimeException headEx = new RuntimeException();
         RuntimeException tailEx = new RuntimeException();
 
@@ -183,7 +183,7 @@ class ResultTest {
     }
 
     @Test
-    void join_with_rule_take_tail() {
+    void should_join_with_rule_into_err_with_last_encountered_error() {
         RuntimeException headEx = new RuntimeException();
         RuntimeException tailEx = new RuntimeException();
 
@@ -198,7 +198,7 @@ class ResultTest {
     }
 
     @Test
-    void join_collection_with_null() {
+    void should_join_into_ok_without_null_elements() {
         List<Result<Integer, RuntimeException>> results = new ArrayList<>();
         results.add(newOk());
         results.add(null);
@@ -209,7 +209,7 @@ class ResultTest {
     }
 
     @Test
-    void elevate_ok_result_present_optional() {
+    void should_elevate_non_empty_into_ok_if_ok() {
         var item = Result.ok(Optional.of(10));
         var elevated = Result.elevate(item);
         assertTrue(elevated.isPresent());
@@ -217,14 +217,14 @@ class ResultTest {
     }
 
     @Test
-    void elevate_ok_result_empty_optional() {
+    void should_elevate_empty_into_ok_if_ok() {
         var item = Result.ok(Optional.empty());
         var elevated = Result.elevate(item);
         assertTrue(elevated.isEmpty());
     }
 
     @Test
-    void elevate_err_result_present_optional() {
+    void should_elevate_into_err_if_err() {
         Result<Optional<Object>, RuntimeException> item = Result.err(new RuntimeException());
         var elevated = Result.elevate(item);
         assertTrue(elevated.isPresent());
@@ -232,24 +232,24 @@ class ResultTest {
     }
 
     @Test
-    void elevate_null_arg() {
+    void should_throw_when_elevating_null() {
         assertThrows(IllegalArgumentException.class, () -> Result.elevate(null));
     }
 
     @Test
-    void get_ok() {
+    void should_get_value_if_ok() {
         var ok = newOk();
         assertEquals(1, ok.get());
     }
 
     @Test
-    void get_err() {
+    void should_throw_when_getting_value_if_err() {
         var err = newErr();
         assertThrows(IllegalStateException.class, err::get);
     }
 
     @Test
-    void fuse_value_1_ok_2_err() {
+    void should_fuse_into_err_if_second_err() {
         var first = newOk();
         var second = newErr();
 
@@ -259,7 +259,7 @@ class ResultTest {
     }
 
     @Test
-    void fuse_value_1_err_2_ok() {
+    void should_fuse_into_err_if_first_err() {
         var first = newErr();
         var second = newOk();
 
@@ -269,7 +269,7 @@ class ResultTest {
     }
 
     @Test
-    void fuse_value_1_ok_2_ok() {
+    void should_fuse_into_ok_if_both_ok() {
         var first = newOk();
         var second = newOk();
 
@@ -280,7 +280,7 @@ class ResultTest {
     }
 
     @Test
-    void fuse_value_1_err_2_err() {
+    void should_fuse_into_err_with_first_error_if_both_err() {
         var first = newErr();
         var second = newErr();
 
@@ -290,7 +290,7 @@ class ResultTest {
     }
 
     @Test
-    void fuse_value_with_rule_1_err_2_err_take_head() {
+    void should_fuse_with_rule_into_err_with_first_error_if_both_err() {
         var first = newErr();
         var second = newErr();
 
@@ -300,7 +300,7 @@ class ResultTest {
     }
 
     @Test
-    void fuse_value_with_rule_1_err_2_err_take_tail() {
+    void should_fuse_with_rule_into_err_with_second_error_if_both_err() {
         var first = newErr();
         var second = newErr();
 
@@ -310,18 +310,18 @@ class ResultTest {
     }
 
     @Test
-    void fuse_value_null_arg() {
+    void should_throw_when_fusing_with_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().fuse((Result<?, RuntimeException>) null));
     }
 
     @Test
-    void fuse_value_with_rule_null_arg() {
+    void should_throw_when_fusing_with_rule_with_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().fuse((Result<?, RuntimeException>) null, null));
         assertThrows(IllegalArgumentException.class, () -> newOk().fuse(Result.ok(10), null));
     }
 
     @Test
-    void fuse_any_1_ok_2_err() {
+    void should_fuse_generic_into_err_if_second_err() {
         var first = newOk();
         var second = FlagResult.err(new RuntimeException());
 
@@ -331,7 +331,7 @@ class ResultTest {
     }
 
     @Test
-    void fuse_any_1_err_2_ok() {
+    void should_fuse_generic_into_err_if_first_err() {
         Result<Integer, RuntimeException> first = newErr();
         FlagResult<RuntimeException> second = FlagResult.ok();
 
@@ -341,7 +341,7 @@ class ResultTest {
     }
 
     @Test
-    void fuse_any_1_ok_2_ok() {
+    void should_fuse_generic_into_ok_if_both_ok() {
         var first = newOk();
         FlagResult<RuntimeException> second = FlagResult.ok();
 
@@ -351,7 +351,7 @@ class ResultTest {
     }
 
     @Test
-    void fuse_any_1_err_2_err() {
+    void should_fuse_generic_into_err_if_both_err() {
         var first = newErr();
         var second = FlagResult.err(new RuntimeException());
 
@@ -361,7 +361,7 @@ class ResultTest {
     }
 
     @Test
-    void fuse_any_1_err_2_err_take_head() {
+    void should_fuse_generic_with_rule_into_err_with_first_error_if_both_err() {
         var first = newErr();
         var second = FlagResult.err(new RuntimeException());
 
@@ -371,7 +371,7 @@ class ResultTest {
     }
 
     @Test
-    void fuse_any_1_err_2_err_take_tail() {
+    void should_fuse_generic_with_rule_into_err_with_second_error_if_both_err() {
         var first = newErr();
         var second = FlagResult.err(new RuntimeException());
 
@@ -381,7 +381,7 @@ class ResultTest {
     }
 
     @Test
-    void fuse_any_with_rule_1_ok_2_ok() {
+    void should_fuse_generic_with_rule_into_ok_if_both_ok() {
         var first = newOk();
         FlagResult<RuntimeException> second = FlagResult.ok();
 
@@ -391,14 +391,14 @@ class ResultTest {
     }
 
     @Test
-    void fuse_any_null_arg() {
+    void should_throw_when_fusing_generic_with_rule_if_null_args() {
         assertThrows(IllegalArgumentException.class, () -> newOk().fuse((BaseResult<RuntimeException>) null));
         assertThrows(IllegalArgumentException.class, () -> newOk().fuse((BaseResult<RuntimeException>) null, null));
         assertThrows(IllegalArgumentException.class, () -> newOk().fuse(FlagResult.ok(), null));
     }
 
     @Test
-    void peek_ok() {
+    void should_peek_on_ok_if_ok() {
         var ok = Result.ok(10);
         AtomicInteger cc = new AtomicInteger();
         var aft = ok
@@ -410,7 +410,7 @@ class ResultTest {
     }
 
     @Test
-    void peek_err() {
+    void should_not_peek_on_ok_if_err() {
         var err = newErr();
         AtomicInteger cc = new AtomicInteger();
         var aft = err
@@ -422,14 +422,14 @@ class ResultTest {
     }
 
     @Test
-    void peek_null_arg() {
+    void should_throw_when_peeking_on_ok_if_callback_or_predicate_is_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().peek(null));
         assertThrows(IllegalArgumentException.class, () -> newOk().peek(null, null));
         assertThrows(IllegalArgumentException.class, () -> newOk().peek(val -> val > 1, null));
     }
 
     @Test
-    void peekErr_ok() {
+    void should_not_peek_on_err_if_ok() {
         var ok = newOk();
         AtomicInteger cc = new AtomicInteger();
         var aft = ok.peekErr(ex -> cc.incrementAndGet());
@@ -438,7 +438,7 @@ class ResultTest {
     }
 
     @Test
-    void peekErr_err() {
+    void should_peek_on_err_if_err() {
         var ok = Result.err(new RuntimeException("abc"));
         AtomicInteger cc = new AtomicInteger();
         var aft = ok
@@ -459,7 +459,7 @@ class ResultTest {
     }
 
     @Test
-    void peekErr_null_arg() {
+    void should_throw_when_peeking_on_err_if_callback_or_predicate_is_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().peekErr(null));
         assertThrows(IllegalArgumentException.class, () -> newOk().peekErr((Class<? extends Exception>) null, null));
         assertThrows(IllegalArgumentException.class, () -> newOk().peekErr(Exception.class, null));
@@ -468,14 +468,14 @@ class ResultTest {
     }
 
     @Test
-    void drop_ok() {
+    void should_drop_into_ok_if_ok() {
         var ok = newOk();
         FlagResult<RuntimeException> dropped = ok.drop();
         assertTrue(dropped.isOk());
     }
 
     @Test
-    void drop_err() {
+    void should_drop_into_err_if_err() {
         var err = newErr();
         FlagResult<RuntimeException> dropped = err.drop();
         assertTrue(dropped.isErr());
@@ -483,7 +483,7 @@ class ResultTest {
     }
 
     @Test
-    void swap_ok() {
+    void should_swap_if_ok() {
         var ok = newOk();
         var swap = ok.swap("abc");
         assertTrue(swap.isOk());
@@ -491,19 +491,19 @@ class ResultTest {
     }
 
     @Test
-    void swap_err() {
+    void should_not_swap_if_err() {
         var err = newErr();
         var swap = err.swap("abc");
         assertTrue(swap.isErr());
     }
 
     @Test
-    void swap_null_arg() {
+    void should_throw_when_swapping_if_new_val_is_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().swap(null));
     }
 
     @Test
-    void map_ok() {
+    void should_map_if_ok() {
         var ok = Result.ok(2);
         var mapped = ok.map("a"::repeat);
         assertTrue(mapped.isOk());
@@ -511,24 +511,20 @@ class ResultTest {
     }
 
     @Test
-    void map_err() {
+    void should_not_map_if_err() {
         var err = newErr();
         var mapped = err.map("a"::repeat);
         assertTrue(mapped.isErr());
     }
 
     @Test
-    void map_null_arg() {
+    void should_throw_when_mapping_if_function_is_null_or_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().map(null));
-    }
-
-    @Test
-    void map_remapper_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().map(integer -> null));
     }
 
     @Test
-    void flatMap_ok() {
+    void should_flat_map_if_ok() {
         Result<Integer, RuntimeException> ok = Result.ok(2);
         Result<String, RuntimeException> mapped = ok.flatMap(counter -> Result.ok("abc"));
         assertTrue(mapped.isOk());
@@ -536,24 +532,20 @@ class ResultTest {
     }
 
     @Test
-    void flatMap_err() {
+    void should_not_flat_map_if_err() {
         Result<Integer, RuntimeException> ok = newErr();
         Result<String, RuntimeException> mapped = ok.flatMap(counter -> Result.ok("abc"));
         assertTrue(mapped.isErr());
     }
 
     @Test
-    void flatMap_null_arg() {
+    void should_throw_when_flat_mapping_if_function_is_null_or_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().flatMap(null));
-    }
-
-    @Test
-    void flatMap_remapper_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().flatMap(integer -> null));
     }
 
     @Test
-    void mapErr_ok() {
+    void should_not_map_err_if_ok() {
         var ok = newOk();
         var mapped = ok.mapErr(exception -> new IllegalStateException());
         assertTrue(mapped.isOk());
@@ -561,7 +553,7 @@ class ResultTest {
     }
 
     @Test
-    void mapErr_err() {
+    void should_map_err_if_err() {
         Result<Integer, RuntimeException> err = newErr();
         Result<Integer, IllegalStateException> mapped = err.mapErr(ex -> new IllegalStateException());
         assertTrue(mapped.isErr());
@@ -569,24 +561,20 @@ class ResultTest {
     }
 
     @Test
-    void mapErr_null_arg() {
+    void should_throw_when_mapping_err_if_function_is_null_or_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newErr().mapErr(null));
-    }
-
-    @Test
-    void mapErr_remapper_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newErr().mapErr(err -> null));
     }
 
     @Test
-    void taint_ok() {
+    void should_taint_if_ok() {
         var ok = newOk();
         var tainted = ok.taint(IllegalStateException::new);
         assertTrue(ok.isOk());
     }
 
     @Test
-    void taint_err() {
+    void should_not_taint_if_err() {
         Result<Integer, RuntimeException> err = newErr();
         Result<Integer, Exception> tainted = err.taint(IllegalStateException::new);
         assertTrue(err.isErr());
@@ -594,24 +582,20 @@ class ResultTest {
     }
 
     @Test
-    void taint_null_arg() {
+    void should_throw_if_taint_supplier_is_null_or_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newErr().taint(null));
-    }
-
-    @Test
-    void taint_supplier_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().taint(() -> null));
     }
 
     @Test
-    void fork_ok() {
+    void should_fork_if_ok() {
         var ok = newOk();
         var tainted = ok.fork(IllegalStateException::new);
         assertTrue(ok.isOk());
     }
 
     @Test
-    void fork_err() {
+    void should_not_fork_if_err() {
         Result<Integer, RuntimeException> err = newErr();
         Result<Integer, RuntimeException> tainted = err.fork(RuntimeException::new);
         assertTrue(err.isErr());
@@ -619,17 +603,13 @@ class ResultTest {
     }
 
     @Test
-    void fork_null_arg() {
+    void should_throw_if_fork_supplier_is_null_or_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newErr().fork(null));
-    }
-
-    @Test
-    void fork_supplier_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().fork(() -> null));
     }
 
     @Test
-    void taint_conditional_matched_ok() {
+    void should_taint_with_predicate_if_ok_and_predicate_holds() {
         var ok = newOk();
         var tainted = ok.taint(val -> val > 0, val -> new NumberFormatException());
         assertTrue(tainted.isErr());
@@ -637,7 +617,7 @@ class ResultTest {
     }
 
     @Test
-    void taint_conditional_not_matched_ok() {
+    void should_not_taint_with_predicate_if_ok_and_predicate_does_not_hold() {
         var ok = newOk();
         var tainted = ok.taint(val -> val < 0, val -> new NumberFormatException());
         assertTrue(tainted.isOk());
@@ -645,7 +625,7 @@ class ResultTest {
     }
 
     @Test
-    void taint_conditional_err() {
+    void should_not_taint_with_predicate_if_err() {
         var err = newErr();
         var tainted = err.taint(val -> val > 0, val -> new NumberFormatException());
         assertTrue(tainted.isErr());
@@ -653,18 +633,14 @@ class ResultTest {
     }
 
     @Test
-    void taint_conditional_null_arg() {
+    void should_throw_when_tainting_with_predicate_if_taint_supplier_is_null_or_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().taint(null, null));
         assertThrows(IllegalArgumentException.class, () -> newOk().taint(val -> val > 0, null));
-    }
-
-    @Test
-    void taint_conditional_factory_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().taint(val -> val > 0, val -> null));
     }
 
     @Test
-    void fork_conditional_matched_ok() {
+    void should_fork_with_predicate_if_ok_and_predicate_holds() {
         var ok = newOk();
         var tainted = ok.fork(val -> val > 0, val -> new NumberFormatException());
         assertTrue(tainted.isErr());
@@ -672,7 +648,7 @@ class ResultTest {
     }
 
     @Test
-    void fork_conditional_not_matched_ok() {
+    void should_not_fork_with_predicate_if_ok_and_predicate_does_not_hold() {
         var ok = newOk();
         var tainted = ok.fork(val -> val < 0, val -> new NumberFormatException());
         assertTrue(tainted.isOk());
@@ -680,7 +656,7 @@ class ResultTest {
     }
 
     @Test
-    void fork_conditional_err() {
+    void should_not_fork_with_predicate_if_err() {
         var err = newErr();
         var tainted = err.fork(val -> val > 0, val -> new NumberFormatException());
         assertTrue(tainted.isErr());
@@ -688,23 +664,18 @@ class ResultTest {
     }
 
     @Test
-    void fork_conditional_null_arg() {
+    void should_throw_when_forking_with_predicate_if_taint_supplier_is_null_or_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().fork(null, null));
         assertThrows(IllegalArgumentException.class, () -> newOk().fork(val -> val > 0, null));
-    }
-
-    @Test
-    void fork_conditional_factory_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().fork(val -> val > 0, val -> null));
     }
 
     @Test
     void recover_supplier_returns_null() {
-        assertThrows(IllegalArgumentException.class, () -> newErr().recover(err -> null));
     }
 
     @Test
-    void recover_from_ok() {
+    void should_not_recover_if_ok() {
         var ok = newOk();
         var recover = ok.recover(err -> -19);
         assertNotSame(ok, recover);
@@ -712,7 +683,7 @@ class ResultTest {
     }
 
     @Test
-    void recover_from_err() {
+    void should_recover_if_err() {
         var err = newErr();
         var recover = err.recover(e -> -19);
         assertTrue(recover.isOk());
@@ -720,12 +691,13 @@ class ResultTest {
     }
 
     @Test
-    void recover_null_arg() {
+    void should_throw_when_recovering_if_supplier_is_null_or_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newErr().recover(null));
+        assertThrows(IllegalArgumentException.class, () -> newErr().recover(err -> null));
     }
 
     @Test
-    void recover_conditional_from_ok() {
+    void should_not_recover_with_predicate_if_ok() {
         var ok = newOk();
         var recover = ok.recover(Objects::nonNull, err -> -19);
         assertNotSame(ok, recover);
@@ -733,7 +705,7 @@ class ResultTest {
     }
 
     @Test
-    void recover_conditional_from_err_matched() {
+    void should_recover_with_predicate_if_err_and_predicate_holds() {
         var err = Result.err(new NumberFormatException("nan"));
         var recover = err.recover(i -> i.getMessage().equals("nan"), er -> -19);
         assertTrue(recover.isOk());
@@ -741,7 +713,7 @@ class ResultTest {
     }
 
     @Test
-    void recover_conditional_from_err_not_matched() {
+    void should_not_recover_with_predicate_if_err_and_predicate_does_not_hold() {
         var err = Result.err(new NumberFormatException("nan"));
         var recover = err.recover(i -> i.getMessage().equals("number"), er -> -19);
         assertTrue(recover.isErr());
@@ -750,9 +722,10 @@ class ResultTest {
     }
 
     @Test
-    void recover_conditional_null_arg() {
+    void should_throw_when_recovering_with_predicate_if_supplier_is_null_or_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newErr().recover((Predicate<RuntimeException>) null, null));
         assertThrows(IllegalArgumentException.class, () -> newErr().recover(Objects::nonNull, null));
+        assertThrows(IllegalArgumentException.class, () -> newErr().recover(Objects::nonNull, err -> null));
     }
 
     @Test
@@ -761,7 +734,7 @@ class ResultTest {
     }
 
     @Test
-    void recover_type_from_ok() {
+    void should_not_recover_with_type_if_ok() {
         var ok = newOk();
         var recover = ok.recover(RuntimeException.class, err -> -19);
         assertNotSame(ok, recover);
@@ -769,7 +742,7 @@ class ResultTest {
     }
 
     @Test
-    void recover_type_from_err_matched() {
+    void should_recover_with_type_if_err_and_predicate_holds() {
         var err = Result.err(new NumberFormatException("nan"));
         var recover = err.recover(NumberFormatException.class, er -> -19);
         assertTrue(recover.isOk());
@@ -777,7 +750,7 @@ class ResultTest {
     }
 
     @Test
-    void recover_type_from_err_matched_broader() {
+    void should_recover_with_subtype_if_err_and_predicate_holds() {
         Result<Integer, RuntimeException> err = Result.err(new IllegalArgumentException("nan"));
         var recover = err.recover(IllegalArgumentException.class, er -> -19);
         assertTrue(recover.isOk());
@@ -785,7 +758,7 @@ class ResultTest {
     }
 
     @Test
-    void recover_type_from_err_not_matched() {
+    void should_not_recover_with_type_if_err_and_predicate_does_not_hold() {
         Result<Integer, Exception> err = Result.err(new IOException("nan"));
         var recover = err.recover(RuntimeException.class, er -> -19);
         assertTrue(recover.isErr());
@@ -794,7 +767,7 @@ class ResultTest {
     }
 
     @Test
-    void recover_type_from_err_not_matched_broader() {
+    void should_not_recover_with_subtype_if_err_and_predicate_does_not_hold() {
         Result<Integer, RuntimeException> err = Result.err(new IllegalArgumentException("nan"));
         var recover = err.recover(IllegalStateException.class, er -> -19);
         assertTrue(recover.isErr());
@@ -803,18 +776,14 @@ class ResultTest {
     }
 
     @Test
-    void recover_type_null_arg() {
+    void should_throw_when_recovering_with_type_if_supplier_is_null_or_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newErr().recover((Class<? extends RuntimeException>) null, null));
         assertThrows(IllegalArgumentException.class, () -> newErr().recover(RuntimeException.class, null));
+        assertThrows(IllegalArgumentException.class, () -> newErr().recover(RuntimeException.class, err -> null));
     }
 
     @Test
-    void recover_conditional_factory_returns_null() {
-        assertThrows(IllegalArgumentException.class, () -> newErr().recover(Objects::nonNull, err -> null));
-    }
-
-    @Test
-    void ifOk_ok() {
+    void should_callback_on_ok_if_ok() {
         AtomicInteger counter = new AtomicInteger();
         var ok = newOk();
         ok.ifOk(counter::incrementAndGet);
@@ -822,7 +791,7 @@ class ResultTest {
     }
 
     @Test
-    void ifOk_err() {
+    void should_not_callback_on_ok_if_err() {
         AtomicInteger counter = new AtomicInteger();
         var err = newErr();
         err.ifOk(counter::incrementAndGet);
@@ -830,7 +799,7 @@ class ResultTest {
     }
 
     @Test
-    void ifOk_conditional_ok() {
+    void should_consume_on_ok_if_ok() {
         AtomicInteger counter = new AtomicInteger();
         var ok = newOk();
         ok.ifOk(item -> counter.incrementAndGet());
@@ -838,7 +807,7 @@ class ResultTest {
     }
 
     @Test
-    void ifOk_conditional_err() {
+    void should_not_consume_on_ok_if_err() {
         AtomicInteger counter = new AtomicInteger();
         var ok = newErr();
         ok.ifOk(item -> counter.incrementAndGet());
@@ -846,12 +815,12 @@ class ResultTest {
     }
 
     @Test
-    void ifOk_conditional_null_arg() {
+    void should_throw_on_consuming_on_ok_if_null_consumer() {
         assertThrows(IllegalArgumentException.class, () -> newOk().ifOk((Consumer<Integer>) null));
     }
 
     @Test
-    void ifErr_err() {
+    void should_callback_on_err_if_err() {
         AtomicInteger counter = new AtomicInteger();
         var err = newErr();
         err.ifErr(counter::incrementAndGet);
@@ -859,7 +828,7 @@ class ResultTest {
     }
 
     @Test
-    void ifErr_ok() {
+    void should_not_callback_ob_err_if_err() {
         AtomicInteger counter = new AtomicInteger();
         var ok = newOk();
         ok.ifErr(counter::incrementAndGet);
@@ -867,7 +836,7 @@ class ResultTest {
     }
 
     @Test
-    void ifErr_conditional_ok() {
+    void should_not_consume_on_err_if_ok() {
         AtomicInteger counter = new AtomicInteger();
         var ok = newOk();
         ok.ifErr(err -> counter.incrementAndGet());
@@ -875,7 +844,7 @@ class ResultTest {
     }
 
     @Test
-    void ifErr_conditional_err() {
+    void should_consume_on_err_if_err() {
         AtomicInteger counter = new AtomicInteger();
         var err = newErr();
         err.ifErr(ex -> counter.incrementAndGet());
@@ -883,57 +852,53 @@ class ResultTest {
     }
 
     @Test
-    void unwrapOr_ok() {
+    void should_unwrap_with_fallback_into_value_if_ok() {
         var ok = newOk();
         var or = ok.unwrapOr(5);
         assertEquals(ok.item, or);
     }
 
     @Test
-    void unwrapOr_err() {
+    void should_unwrap_with_fallback_into_fallback_if_err() {
         var ok = newErr();
         var or = ok.unwrapOr(5);
         assertEquals(5, or);
     }
 
     @Test
-    void unwrapOr_null_arg() {
+    void should_throw_if_unwrapping_with_null_fallback() {
         assertThrows(IllegalArgumentException.class, () -> newErr().unwrapOr((Integer) null));
     }
 
     @Test
-    void unwrapOr_supplier_err() {
+    void should_unwrap_with_factory_into_value_if_err() {
         var ok = newErr();
         var or = ok.unwrapOr(() -> 5);
         assertEquals(5, or);
     }
 
     @Test
-    void unwrapOr_supplier_ok() {
+    void should_unwrap_with_factory_into_value_if_ok() {
         var ok = newOk();
         var or = ok.unwrapOr(() -> 5);
         assertEquals(ok.item, or);
     }
 
     @Test
-    void unwrapOr_supplier_null_arg() {
+    void should_throw_if_unwrapping_with_factory_null_or_returning_null() {
         assertThrows(IllegalArgumentException.class, () -> newErr().unwrapOr((Supplier<Integer>) null));
-    }
-
-    @Test
-    void unwrapOr_supplier_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newErr().unwrapOr(() -> null));
     }
 
     @Test
-    void unwrap_ok() {
+    void should_unwrap_into_value_if_ok() {
         var ok = newOk();
         assertDoesNotThrow(ok::unwrap);
         assertEquals(1, ok.unwrap());
     }
 
     @Test
-    void unwrap_err() {
+    void should_throw_when_unwrapping_if_err() {
         try {
             Result.err(new NoSuchElementException()).unwrap();
         } catch (Exception ex) {
@@ -944,14 +909,14 @@ class ResultTest {
     }
 
     @Test
-    void unwrap_checked_ok() {
+    void should_checked_unwrap_into_value_if_ok() {
         var ok = newOk();
         assertDoesNotThrow(ok::unwrapChecked);
         assertEquals(1, ok.unwrapChecked());
     }
 
     @Test
-    void unwrap_checked_err() {
+    void should_throw_when_checked_unwrapping_if_err() {
         try {
             Result.err(new NoSuchElementException()).unwrapChecked();
         } catch (Exception ex) {
@@ -961,7 +926,7 @@ class ResultTest {
     }
 
     @Test
-    void hash_code_ok() {
+    void should_compute_hashcode_from_ok_if_ok() {
         String item = "abc";
         int itemHash = item.hashCode();
         int resultHash = Result.ok(item).hashCode();
@@ -969,7 +934,7 @@ class ResultTest {
     }
 
     @Test
-    void hash_code_err() {
+    void should_compute_hashcode_from_error_if_err() {
         RuntimeException ex = new RuntimeException();
         int errHashCode = ex.hashCode();
         var result = Result.err(ex);
@@ -978,21 +943,21 @@ class ResultTest {
     }
 
     @Test
-    void equals_ok_equal() {
+    void should_see_two_ok_equal_if_items_equal() {
         var first = Result.ok(1);
         var second = Result.ok(1);
         assertEquals(first, second);
     }
 
     @Test
-    void equals_ok_not_equal() {
+    void should_not_see_two_ok_equal_if_items_not_equal() {
         var first = Result.ok(1);
         var second = Result.ok(2);
         assertNotEquals(first, second);
     }
 
     @Test
-    void equals_err_equal() {
+    void should_see_two_err_equal_if_errors_equal() {
         RuntimeException ex = new RuntimeException();
         var first = Result.err(ex);
         var second = Result.err(ex);
@@ -1000,7 +965,7 @@ class ResultTest {
     }
 
     @Test
-    void equals_err_not_equal() {
+    void should_not_see_two_err_equal_if_errors_not_equal() {
         RuntimeException ex1 = new RuntimeException();
         RuntimeException ex2 = new IllegalArgumentException();
         var first = Result.err(ex1);
@@ -1009,23 +974,17 @@ class ResultTest {
     }
 
     @Test
-    void equals_same_instance() {
-        var ok = newOk();
-        assertEquals(ok, ok);
-    }
-
-    @Test
-    void equals_that_is_null() {
+    void should_not_see_equal_if_second_is_null() {
         assertNotEquals(newOk(), null);
     }
 
     @Test
-    void equals_different_type() {
+    void should_not_see_two_equal_if_second_has_different_type() {
         assertNotEquals(newOk(), new Object());
     }
 
     @Test
-    void toString_ok() {
+    void should_show_toString_if_ok() {
         assertEquals(
                 "Result[ok=1]",
                 newOk().toString()
@@ -1033,7 +992,7 @@ class ResultTest {
     }
 
     @Test
-    void toString_err() {
+    void should_show_toString_if_err() {
         var err = new RuntimeException();
         assertEquals(
                 "Result[err=%s]".formatted(err),
