@@ -332,7 +332,7 @@ public class FlagResult<E extends Exception> extends BaseResult<E> {
      *  the factory function returns {@code null}
      */
     @Override
-    public FlagResult<E> taintMatching(@NonNull Supplier<E> factory) {
+    public FlagResult<E> fork(@NonNull Supplier<E> factory) {
         if (isOk()) {
             return err(factory.get());
         } else {
@@ -349,6 +349,17 @@ public class FlagResult<E extends Exception> extends BaseResult<E> {
     public void unwrap() {
         if (isErr()) {
             throw new Failure(error);
+        }
+    }
+
+    /**
+     * Throws the internal {@code ERR} state if {@code
+     *  this} instance is an {@code ERR}.
+     * @throws E result wrapping exception
+     */
+    public void unwrapChecked() throws E {
+        if (isErr()) {
+            throw error;
         }
     }
 
