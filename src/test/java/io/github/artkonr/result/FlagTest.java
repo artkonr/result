@@ -249,6 +249,20 @@ class FlagTest {
     }
 
     @Test
+    void should_lose_specific_type_if_err() {
+        FlagResult<RuntimeException> source = newErr();
+        FlagResult<Exception> lossy = source.upcast();
+        assertInstanceOf(RuntimeException.class, lossy.error);
+    }
+
+    @Test
+    void should_lose_specific_type_if_ok() {
+        FlagResult<RuntimeException> source = FlagResult.ok();
+        FlagResult<Exception> lossy = source.upcast();
+        assertTrue(lossy.isOk());
+    }
+
+    @Test
     void should_not_apply_map_to_err_if_ok() {
         var ok = FlagResult.ok();
         var mapped = ok.mapErr(RuntimeException::new);
@@ -542,6 +556,13 @@ class FlagTest {
         var first = FlagResult.ok();
         var second = FlagResult.ok();
         assertEquals(first, second);
+    }
+
+    @Test
+    void should_see_same_equal() {
+        var ths = newErr();
+        var tht = ths;
+        assertEquals(ths, tht);
     }
 
     @Test

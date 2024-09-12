@@ -98,6 +98,13 @@ public abstract class BaseResult<E extends Exception> {
     public abstract <N extends Exception> BaseResult<N> mapErr(@NonNull Function<E, N> remap);
 
     /**
+     * Erases the {@code ERR} type information of
+     *  {@code this} result.
+     * @return result with broadened
+     */
+    public abstract BaseResult<Exception> upcast();
+
+    /**
      * Converts an {@code OK} result into {@code ERR}
      *  using the specified factory if {@code this}
      *  instance is {@code OK}. Recreates {@code this}

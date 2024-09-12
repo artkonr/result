@@ -472,6 +472,16 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
     }
 
     /**
+     * Erases the {@code ERR} type information of
+     *  {@code this} result.
+     * @return result with broadened
+     */
+    @Override
+    public Result<V, Exception> upcast() {
+        return isOk() ? Result.ok(item) : Result.err(error);
+    }
+
+    /**
      * {@inheritDoc}
      * @param remap callback
      * @return mapped {@link Result}
@@ -737,15 +747,15 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
 
     /**
      * Checks if {@code this} equals {@code that}.
-     * @param o that
+     * @param that that
      * @return comparison result
      */
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+    public boolean equals(Object that) {
+        if (this == that) return true;
+        if (that == null || getClass() != that.getClass()) return false;
 
-        Result<?, ?> result = (Result<?, ?>) o;
+        Result<?, ?> result = (Result<?, ?>) that;
 
         if (!Objects.equals(item, result.item)) return false;
         return Objects.equals(error, result.error);
