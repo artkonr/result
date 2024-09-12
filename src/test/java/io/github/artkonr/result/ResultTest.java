@@ -545,6 +545,20 @@ class ResultTest {
     }
 
     @Test
+    void should_lose_specific_type_if_err() {
+        Result<Integer, RuntimeException> source = newErr();
+        Result<Integer, Exception> lossy = source.upcast();
+        assertInstanceOf(RuntimeException.class, lossy.error);
+    }
+
+    @Test
+    void should_lose_specific_type_if_ok() {
+        Result<Integer, RuntimeException> source = newOk();
+        Result<Integer, Exception> lossy = source.upcast();
+        assertTrue(lossy.isOk());
+    }
+
+    @Test
     void should_not_map_err_if_ok() {
         var ok = newOk();
         var mapped = ok.mapErr(exception -> new IllegalStateException());
@@ -981,6 +995,13 @@ class ResultTest {
     @Test
     void should_not_see_two_equal_if_second_has_different_type() {
         assertNotEquals(newOk(), new Object());
+    }
+
+    @Test
+    void should_see_same_equal() {
+        var ths = newErr();
+        var tht = ths;
+        assertEquals(ths, tht);
     }
 
     @Test

@@ -284,6 +284,16 @@ public class FlagResult<E extends Exception> extends BaseResult<E> {
     }
 
     /**
+     * Erases the {@code ERR} type information of
+     *  {@code this} result.
+     * @return result with broadened
+     */
+    @Override
+    public FlagResult<Exception> upcast() {
+        return isOk() ? FlagResult.ok() : FlagResult.err(error);
+    }
+
+    /**
      * {@inheritDoc}
      * @param remap callback
      * @return mapped {@link FlagResult}
