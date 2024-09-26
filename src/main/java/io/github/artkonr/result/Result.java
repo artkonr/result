@@ -125,6 +125,52 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
     }
 
     /**
+     * Invokes {@link Result}-producing functions in a serialized
+     *  manner and short-circuits upon the first encountered {@code
+     *  ERR} result. Encountered {@code null} elements are ignored.
+     * <p>This method takes the input collection as-is, the invocations
+     *  are made in the order they appear in the collection.
+     * @param invocations operations to invoke
+     * @return if either of the invocations short-circuits, an {@code ERR}
+     *  result is returned. If all invocations succeed, a collection
+     *  of resulting items is returned.
+     * @param <V> item type
+     * @param <E> error type
+     * @throws IllegalArgumentException if no argument provided
+     */
+    public static <V, E extends Exception> Result<List<V>, E> chain(@NonNull Collection<Supplier<Result<V, E>>> invocations) {
+        List<Supplier<Result<V, E>>> filtered = invocations.stream()
+                .filter(Objects::nonNull)
+                .toList();
+        List<V> ok = new ArrayList<>();
+        if (!filtered.isEmpty()) {
+            Iterator<Supplier<Result<V, E>>> iterator = filtered.iterator();
+            E err = null;
+            while (iterator.hasNext()) {
+                Result<V, E> curr = iterator.next().get();
+                if (curr == null) {
+                    continue;
+                }
+
+                if (curr.isOk()) {
+                    ok.add(curr.item);
+                } else {
+                    err = curr.error;
+                    break;
+                }
+            }
+
+            if (err == null) {
+                return Result.ok(ok);
+            } else {
+                return err(err);
+            }
+        } else {
+            return Result.ok(ok);
+        }
+    }
+
+    /**
      * Joins a {@link Collection} of {@link Result} objects into
      *  a {@link Result} of {@link List} of items.
      * <p>The eventual {@link Result} will have the {@code OK} state
@@ -468,6 +514,24 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
             return err(error);
         } else {
             return returnRemapped(remap.apply(item));
+        }
+    }
+
+    /**
+     * Same as {@link Result#flatMap(Function)} with the only
+     *  difference is that the remapping function accepts any
+     *  {@link BaseResult} and returns a {@link FlagResult result}
+     *  without value.
+     * @param remap function
+     * @return mapped {@link FlagResult}
+     * @throws IllegalArgumentException if no argument provided or
+     *  if the callback function returns {@code null}
+     */
+    public FlagResult<E> flatMapAndDrop(@NonNull Function<V, BaseResult<E>> remap) {
+        if (isErr()) {
+            return FlagResult.err(error);
+        } else {
+            return FlagResult.from(remap.apply(item));
         }
     }
 

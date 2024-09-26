@@ -209,6 +209,48 @@ class ResultTest {
     }
 
     @Test
+    void should_chain_into_ok_if_all_ok() {
+        List<Supplier<Result<Integer, RuntimeException>>> list = new ArrayList<>();
+        list.add(() -> Result.ok(1));
+        list.add(null);
+        list.add(() -> null);
+        list.add(() -> Result.ok(2));
+
+        var chained = Result.chain(list);
+        assertTrue(chained.isOkAnd(
+                ls -> ls.size() == 2
+             && ls.get(0) == 1
+             && ls.get(1) == 2
+        ));
+        assertEquals(2, chained.get().size());
+        assertEquals(1, chained.get().get(0));
+        assertEquals(2, chained.get().get(1));
+    }
+
+    @Test
+    void should_chain_until_first_error_occurs() {
+        List<Supplier<Result<Integer, RuntimeException>>> list = new ArrayList<>();
+        list.add(ResultTest::newOk);
+        list.add(null);
+        list.add(() -> Result.err(new RuntimeException("1")));
+        list.add(() -> Result.err(new RuntimeException("2")));
+
+        var chained = Result.chain(list);
+        assertTrue(chained.isErrAnd(e -> e.getMessage().equals("1")));
+    }
+
+    @Test
+    void should_throw_if_chain_over_null_collection() {
+        assertThrows(IllegalArgumentException.class, () -> Result.chain(null));
+    }
+
+    @Test
+    void should_chain_into_ok_if_empty_collection() {
+        var ok = Result.chain(List.of());
+        assertTrue(ok.isOk());
+    }
+
+    @Test
     void should_elevate_non_empty_into_ok_if_ok() {
         var item = Result.ok(Optional.of(10));
         var elevated = Result.elevate(item);
@@ -542,6 +584,26 @@ class ResultTest {
     void should_throw_when_flat_mapping_if_function_is_null_or_returns_null() {
         assertThrows(IllegalArgumentException.class, () -> newOk().flatMap(null));
         assertThrows(IllegalArgumentException.class, () -> newOk().flatMap(integer -> null));
+    }
+
+    @Test
+    void should_flat_map_and_drop_if_ok() {
+        Result<Integer, RuntimeException> ok = Result.ok(2);
+        FlagResult<RuntimeException> mapped = ok.flatMapAndDrop(counter -> Result.ok("abc"));
+        assertTrue(mapped.isOk());
+    }
+
+    @Test
+    void should_not_flat_map_and_drop_if_err() {
+        Result<Integer, RuntimeException> err = newErr();
+        FlagResult<RuntimeException> mapped = err.flatMapAndDrop(counter -> Result.ok("abc"));
+        assertTrue(mapped.isErr());
+    }
+
+    @Test
+    void should_throw_when_flat_mapping_and_dropping_if_function_is_null_or_returns_null() {
+        assertThrows(IllegalArgumentException.class, () -> newOk().flatMapAndDrop(null));
+        assertThrows(IllegalArgumentException.class, () -> newOk().flatMapAndDrop(integer -> null));
     }
 
     @Test

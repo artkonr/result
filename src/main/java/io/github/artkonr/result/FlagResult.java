@@ -3,6 +3,7 @@ package io.github.artkonr.result;
 import lombok.NonNull;
 
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -104,6 +105,43 @@ public class FlagResult<E extends Exception> extends BaseResult<E> {
      */
     public static <E extends Exception> FlagResult<E> err(@NonNull E error) {
         return new FlagResult<>(error);
+    }
+
+    /**
+     * Invokes {@link FlagResult}-producing functions in a serialized
+     *  manner and short-circuits upon the first encountered {@code
+     *  ERR} result. Encountered {@code null} elements are ignored.
+     * <p>This method takes the input collection as-is, the invocations
+     *  are made in the order they appear in the collection.
+     * @param invocations operations to invoke
+     * @return if either of the invocations short-circuits, an {@code ERR}
+     *  result is returned. If all invocations succeed, an {@code OK} is returned.
+     * @param <E> error type
+     * @throws IllegalArgumentException if no argument provided
+     */
+    public static <E extends Exception> FlagResult<E> chain(@NonNull Collection<Supplier<BaseResult<E>>> invocations) {
+        List<Supplier<BaseResult<E>>> filtered = invocations.stream()
+                .filter(Objects::nonNull)
+                .toList();
+        if (!filtered.isEmpty()) {
+            Iterator<Supplier<BaseResult<E>>> iterator = filtered.iterator();
+            E err = null;
+            while (iterator.hasNext()) {
+                BaseResult<E> curr = iterator.next().get();
+                if (curr != null && curr.isErr()) {
+                    err = curr.getErr();
+                    break;
+                }
+            }
+
+            if (err == null) {
+                return FlagResult.ok();
+            } else {
+                return err(err);
+            }
+        } else {
+            return FlagResult.ok();
+        }
     }
 
     /**
@@ -311,6 +349,23 @@ public class FlagResult<E extends Exception> extends BaseResult<E> {
     }
 
     /**
+     * Applies the {@link BaseResult}-returning function to
+     *  convert the item if {@code this} instance is {@code OK};
+     *  returns a recreated {@code ERR} otherwise.
+     * @param remap function
+     * @return mapped {@link FlagResult}
+     * @throws IllegalArgumentException if no argument provided or
+     *  if the callback function returns {@code null}
+     */
+    public FlagResult<E> flatMap(@NonNull Supplier<FlagResult<E>> remap) {
+        if (isErr()) {
+            return err(error);
+        } else {
+            return returnRemapped(remap.get());
+        }
+    }
+
+    /**
      * Converts an {@code OK} result into {@code ERR}
      *  using the specified factory if {@code this}
      *  instance is {@code OK}. Recreates {@code this}
@@ -420,4 +475,7 @@ public class FlagResult<E extends Exception> extends BaseResult<E> {
         super(error);
     }
 
+    private FlagResult<E> returnRemapped(@NonNull FlagResult<E> val) {
+        return val;
+    }
 }

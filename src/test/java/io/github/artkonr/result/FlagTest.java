@@ -3,6 +3,7 @@ package io.github.artkonr.result;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -136,6 +137,41 @@ class FlagTest {
                 IllegalStateException.class,
                 () -> { throw new NoSuchElementException(); }
         ));
+    }
+
+    @Test
+    void should_chain_into_ok_if_all_ok() {
+        List<Supplier<BaseResult<RuntimeException>>> list = new ArrayList<>();
+        list.add(FlagResult::ok);
+        list.add(null);
+        list.add(() -> null);
+        list.add(FlagResult::ok);
+
+        var chained = FlagResult.chain(list);
+        assertTrue(chained.isOk());
+    }
+
+    @Test
+    void should_chain_until_first_error_occurs() {
+        List<Supplier<BaseResult<RuntimeException>>> list = new ArrayList<>();
+        list.add(FlagResult::ok);
+        list.add(null);
+        list.add(() -> FlagResult.err(new RuntimeException("1")));
+        list.add(() -> FlagResult.err(new RuntimeException("2")));
+
+        var chained = FlagResult.chain(list);
+        assertTrue(chained.isErrAnd(e -> e.getMessage().equals("1")));
+    }
+
+    @Test
+    void should_throw_if_chain_over_null_collection() {
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.chain(null));
+    }
+
+    @Test
+    void should_chain_into_ok_if_empty_collection() {
+        var ok = FlagResult.chain(List.of());
+        assertTrue(ok.isOk());
     }
 
     @Test
@@ -276,6 +312,26 @@ class FlagTest {
         var mapped = err.mapErr(RuntimeException::new);
         assertTrue(mapped.isErr());
         assertNotSame(err.error, mapped.error);
+    }
+
+    @Test
+    void should_flat_map_if_ok() {
+        var ok = FlagResult.ok();
+        var mapped = ok.flatMap(() -> FlagResult.err(new RuntimeException()));
+        assertTrue(mapped.isErrAnd(RuntimeException.class));
+    }
+
+    @Test
+    void should_not_flat_map_if_err() {
+        var ok = FlagResult.err(new RuntimeException());
+        var mapped = ok.flatMap(FlagResult::ok);
+        assertTrue(mapped.isErr());
+    }
+
+    @Test
+    void should_throw_if_flat_map_function_null_or_returns_null() {
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().flatMap(null));
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().flatMap(() -> null));
     }
 
     @Test
