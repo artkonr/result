@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -590,6 +591,95 @@ class FlagTest {
         assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().peekErr(Exception.class, null));
         assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().peekErr((Predicate<Exception>) null, null));
         assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().peekErr(ex -> ex instanceof RuntimeException, null));
+    }
+
+    @Test
+    void should_not_recover_if_ok() {
+        var ok = FlagResult.ok();
+        var recover = ok.recover();
+        assertTrue(recover.isOk());
+        assertNotSame(ok, recover);
+    }
+
+    @Test
+    void should_recover_if_err() {
+        var err = newErr();
+        var recover = err.recover();
+        assertTrue(recover.isOk());
+    }
+
+    @Test
+    void should_not_recover_with_predicate_if_ok() {
+        var ok = FlagResult.ok();
+        var recover = ok.recover(Objects::nonNull);
+        assertTrue(recover.isOk());
+        assertNotSame(ok, recover);
+    }
+
+    @Test
+    void should_recover_with_predicate_if_err_and_predicate_holds() {
+        var err = FlagResult.err(new NumberFormatException("nan"));
+        var recover = err.recover(i -> i.getMessage().equals("nan"));
+        assertTrue(recover.isOk());
+    }
+
+    @Test
+    void should_not_recover_with_predicate_if_err_and_predicate_does_not_hold() {
+        var err = FlagResult.err(new NumberFormatException("nan"));
+        var recover = err.recover(i -> i.getMessage().equals("number"));
+        assertTrue(recover.isErr());
+        assertNotSame(err, recover);
+        assertSame(err.error, recover.error);
+    }
+
+    @Test
+    void should_throw_when_recovering_with_predicate_if_argument_null() {
+        assertThrows(IllegalArgumentException.class, () -> newErr().recover((Predicate<RuntimeException>) null));
+    }
+
+    @Test
+    void should_not_recover_with_type_if_ok() {
+        var ok = FlagResult.ok();
+        var recover = ok.recover(RuntimeException.class);
+        assertTrue(recover.isOk());
+        assertNotSame(ok, recover);
+    }
+
+    @Test
+    void should_recover_with_type_if_err_and_predicate_holds() {
+        var err = FlagResult.err(new NumberFormatException("nan"));
+        var recover = err.recover(NumberFormatException.class);
+        assertTrue(recover.isOk());
+    }
+
+    @Test
+    void should_recover_with_subtype_if_err_and_predicate_holds() {
+        FlagResult<RuntimeException> err = FlagResult.err(new IllegalArgumentException("nan"));
+        var recover = err.recover(IllegalArgumentException.class);
+        assertTrue(recover.isOk());
+    }
+
+    @Test
+    void should_not_recover_with_type_if_err_and_predicate_does_not_hold() {
+        FlagResult<Exception> err = FlagResult.err(new IOException("nan"));
+        var recover = err.recover(RuntimeException.class);
+        assertTrue(recover.isErr());
+        assertNotSame(err, recover);
+        assertSame(err.error, recover.error);
+    }
+
+    @Test
+    void should_not_recover_with_subtype_if_err_and_predicate_does_not_hold() {
+        FlagResult<RuntimeException> err = FlagResult.err(new IllegalArgumentException("nan"));
+        var recover = err.recover(IllegalStateException.class);
+        assertTrue(recover.isErr());
+        assertNotSame(err, recover);
+        assertSame(err.error, recover.error);
+    }
+
+    @Test
+    void should_throw_when_recovering_with_type_if_null_argument() {
+        assertThrows(IllegalArgumentException.class, () -> newErr().recover((Class<? extends RuntimeException>) null));
     }
 
     @Test

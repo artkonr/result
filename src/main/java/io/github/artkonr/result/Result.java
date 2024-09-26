@@ -679,12 +679,11 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
     }
 
     /**
-     * Converts an {@code ERR} result into {@code OK}
-     *  using the specified factory faction. If {@code this}
-     *  result is already an {@code OK} result, the internal
-     *  {@code OK} object is returned.
-     * <p>If the predicate does not hold, returns the
-     *  recreated {@code OK} item.
+     * Conditionally converts an {@code ERR} result into {@code OK}
+     *  using the specified factory faction if the supplied predicate
+     *  holds. If {@code this} result is already an {@code OK} result,
+     *  the internal {@code OK} object is returned.
+     * <p>If the predicate does not hold, returns the recreated {@code OK} item.
      * @param condition checked predicate
      * @param factory {@code OK} object factory
      * @return new {@code OK} result with recovery object
@@ -703,12 +702,12 @@ public class Result<V, E extends Exception> extends BaseResult<E> {
     }
 
     /**
-     * Converts an {@code ERR} result into {@code OK}
-     *  using the specified factory faction. If {@code this}
-     *  result is already an {@code OK} result, the internal
-     *  {@code OK} object is returned.
-     * <p>If the predicate does not hold, returns the
-     *  recreated {@code OK} item.
+     * Conditionally converts an {@code ERR} result into {@code OK}
+     *  using the specified factory faction if the {@code ERR} is
+     *  {@code instanceof} the specified type. If {@code this} result
+     *  is already an {@code OK} result, the internal {@code OK} object
+     *  is returned.
+     * <p>If the predicate does not hold, returns the recreated {@code OK} item.
      * @param ifType checked type
      * @param factory {@code OK} object factory
      * @return new {@code OK} result with recovery object

@@ -406,6 +406,51 @@ public class FlagResult<E extends Exception> extends BaseResult<E> {
     }
 
     /**
+     * Unconditionally converts an {@code ERR} result into {@code OK}.
+     * @return new {@code OK} result
+     */
+    public FlagResult<E> recover() {
+        return FlagResult.ok();
+    }
+
+    /**
+     * Conditionally converts an {@code ERR} result into {@code OK}
+     *  if the supplied predicate holds.
+     * <p>If the predicate does not hold, returns the recreated {@code OK} item.
+     * @param condition checked predicate
+     * @return new {@code OK} result
+     * @throws IllegalArgumentException if the argument not provided
+     */
+    public FlagResult<E> recover(@NonNull Predicate<E> condition) {
+        if (isOk()) {
+            return FlagResult.ok();
+        } else {
+            return condition.test(error)
+                    ? FlagResult.ok()
+                    : FlagResult.err(error);
+        }
+    }
+
+    /**
+     * Conditionally converts an {@code ERR} result into {@code OK}
+     *  if the {@code ERR} is {@code instanceof} the specified type.
+     * @param ifType checked type
+     * @return new {@code OK} result with recovery object
+     * @throws IllegalArgumentException if the argument not provided
+     */
+    public FlagResult<E> recover(@NonNull Class<? extends E> ifType) {
+        if (isOk()) {
+            return FlagResult.ok();
+        } else {
+            if (ifType.isAssignableFrom(error.getClass())) {
+                return FlagResult.ok();
+            } else {
+                return FlagResult.err(error);
+            }
+        }
+    }
+
+    /**
      * Wraps the internal {@code ERR} state into a {@link
      *  Failure wrapping exception} and throws if {@code
      *  this} instance is an {@code ERR}.
