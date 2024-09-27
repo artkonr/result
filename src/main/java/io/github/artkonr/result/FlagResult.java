@@ -272,6 +272,20 @@ public class FlagResult<E extends Exception> extends BaseResult<E> {
     }
 
     /**
+     * Invokes the supplied callback if {@code this}
+     *  instance is {@code OK}.
+     * @param consumer callback
+     * @return same instance
+     * @throws IllegalArgumentException if no argument provided
+     */
+    public FlagResult<E> peek(@NonNull Runnable consumer) {
+        if (isOk()) {
+            consumer.run();
+        }
+        return this;
+    }
+
+    /**
      * Inspects the {@code ERR} state using the specified function,
      *  if {@code this} instance is {@code ERR}.
      * @param consumer inspection function
