@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -552,6 +553,27 @@ class FlagTest {
     void should_throw_when_fusing_if_second_or_rule_is_null() {
         assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().fuse(FlagResult.ok(), null));
         assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().fuse(null, null));
+    }
+
+    @Test
+    void should_peek_if_ok() {
+        var ok = FlagResult.ok();
+        AtomicBoolean observer = new AtomicBoolean(false);
+        var peeked = ok.peek(() -> observer.set(true));
+        assertTrue(observer.get());
+    }
+
+    @Test
+    void should_not_peek_if_err() {
+        var ok = newErr();
+        AtomicBoolean observer = new AtomicBoolean(false);
+        var peeked = ok.peek(() -> observer.set(true));
+        assertFalse(observer.get());
+    }
+
+    @Test
+    void should_throw_when_peeking_if_null_callback() {
+        assertThrows(IllegalArgumentException.class, () -> FlagResult.ok().peek(null));
     }
 
     @Test
