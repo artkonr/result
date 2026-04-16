@@ -23,26 +23,27 @@ public enum TakeFrom {
 
     /**
      * Use the rule to derive which error is returned.
-     * @param head head
-     * @param tail tail
+     * @param left head
+     * @param right tail
      * @return picked error or empty optional
      * @param <E> error type
      */
-    <E extends Exception> Optional<E> takeError(BaseResult<E> head, BaseResult<E> tail) {
+    <V, N, E extends Exception> Optional<E> takeError(Result<V, E> head, Result<N, E> tail) {
+      
         if (head.isErr() && tail.isErr()) {
             E picked = switch (this) {
-                case HEAD -> head.error;
-                case TAIL -> tail.error;
+                case HEAD -> head.err();
+                case TAIL -> tail.err();
             };
             return Optional.of(picked);
         }
 
         if (head.isErr()) {
-            return Optional.of(head.error);
+            return Optional.of(head.err());
         }
 
         if (tail.isErr()) {
-            return Optional.of(tail.error);
+            return Optional.of(tail.err());
         }
 
         return Optional.empty();

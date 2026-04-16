@@ -3,7 +3,7 @@ package io.github.artkonr.result;
 /**
  * A simple {@link RuntimeException}, wrapping checked
  *  exceptions thrown from within implementations of
- *  {@link BaseResult}.
+ *  {@link IBaseResult}.
  */
 public class Failure extends RuntimeException {
 
