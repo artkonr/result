@@ -452,6 +452,14 @@ class ResultTest {
     }
 
     @Test
+    void should_stack_ok_with_function() {
+        Result<String, RuntimeException> result = new Ok<>("value");
+        Result<String, IllegalArgumentException> stacked = result.stack((java.util.function.Function<RuntimeException, IllegalArgumentException>) e -> new IllegalArgumentException(e.getMessage()));
+        assertTrue(stacked.isOk());
+        assertEquals("value", stacked.value());
+    }
+
+    @Test
     void should_stack_err_with_supplier() {
         Result<String, RuntimeException> result = new Err<>(new RuntimeException("error"));
         Result<String, IllegalArgumentException> stacked = result.stack((Supplier<IllegalArgumentException>) () -> new IllegalArgumentException("supplied"));
@@ -463,6 +471,14 @@ class ResultTest {
     void should_throw_illegal_argument_when_stack_supplier_null() {
         Result<String, RuntimeException> result = new Ok<>("value");
         assertThrows(IllegalArgumentException.class, () -> result.stack((Supplier<IllegalArgumentException>) null));
+    }
+
+    @Test
+    void should_stack_ok_with_supplier() {
+        Result<String, RuntimeException> result = new Ok<>("value");
+        Result<String, IllegalArgumentException> stacked = result.stack((Supplier<IllegalArgumentException>) () -> new IllegalArgumentException("supplied"));
+        assertTrue(stacked.isOk());
+        assertEquals("value", stacked.value());
     }
 
     @Test
@@ -541,6 +557,28 @@ class ResultTest {
         Result<Fuse<String, Integer>, Exception> fused = result1.fuse(result2, TakeFrom.TAIL);
         assertTrue(fused.isErr());
         assertSame(ex, fused.err());
+    }
+
+    @Test
+    void should_fuse_err_and_err_with_head_rule() {
+        Exception ex1 = new RuntimeException("left");
+        Exception ex2 = new RuntimeException("right");
+        Result<String, Exception> result1 = new Err<>(ex1);
+        Result<Integer, Exception> result2 = new Err<>(ex2);
+        Result<Fuse<String, Integer>, Exception> fused = result1.fuse(result2, TakeFrom.HEAD);
+        assertTrue(fused.isErr());
+        assertSame(ex1, fused.err());
+    }
+
+    @Test
+    void should_fuse_err_and_err_with_tail_rule() {
+        Exception ex1 = new RuntimeException("left");
+        Exception ex2 = new RuntimeException("right");
+        Result<String, Exception> result1 = new Err<>(ex1);
+        Result<Integer, Exception> result2 = new Err<>(ex2);
+        Result<Fuse<String, Integer>, Exception> fused = result1.fuse(result2, TakeFrom.TAIL);
+        assertTrue(fused.isErr());
+        assertSame(ex2, fused.err());
     }
 
     @Test
@@ -803,6 +841,14 @@ class ResultTest {
     }
 
     @Test
+    void should_recover_ok_with_predicate() {
+        Result<String, Exception> result = new Ok<>("value");
+        Result<String, Exception> recovered = result.recover(e -> true, "default");
+        assertTrue(recovered.isOk());
+        assertEquals("value", recovered.value());
+    }
+
+    @Test
     void should_throw_illegal_argument_when_recover_predicate_null() {
         Result<String, Exception> result = new Err<>(new RuntimeException());
         assertThrows(IllegalArgumentException.class, () -> result.recover((java.util.function.Predicate<Exception>) null, "default"));
@@ -823,6 +869,14 @@ class ResultTest {
     }
 
     @Test
+    void should_recover_ok_with_predicate_and_supplier() {
+        Result<String, Exception> result = new Ok<>("value");
+        Result<String, Exception> recovered = result.recover((java.util.function.Predicate<Exception>) e -> true, (Supplier<String>) () -> "supplied");
+        assertTrue(recovered.isOk());
+        assertEquals("value", recovered.value());
+    }
+
+    @Test
     void should_throw_illegal_argument_when_recover_with_predicate_supplier_null() {
         Result<String, Exception> result = new Err<>(new RuntimeException());
         assertThrows(IllegalArgumentException.class, () -> result.recover((java.util.function.Predicate<Exception>) e -> true, (Supplier<String>) null));
@@ -834,6 +888,14 @@ class ResultTest {
         Result<String, Exception> recovered = result.recover((java.util.function.Predicate<Exception>) e -> true, (java.util.function.Function<Exception, String>) e -> "recovered: " + e.getMessage());
         assertTrue(recovered.isOk());
         assertEquals("recovered: error", recovered.value());
+    }
+
+    @Test
+    void should_recover_ok_with_predicate_and_function() {
+        Result<String, Exception> result = new Ok<>("value");
+        Result<String, Exception> recovered = result.recover((java.util.function.Predicate<Exception>) e -> true, (java.util.function.Function<Exception, String>) e -> "recovered: " + e.getMessage());
+        assertTrue(recovered.isOk());
+        assertEquals("value", recovered.value());
     }
 
     @Test
@@ -878,6 +940,14 @@ class ResultTest {
     }
 
     @Test
+    void should_recover_ok_with_type_and_supplier() {
+        Result<String, Exception> result = new Ok<>("value");
+        Result<String, Exception> recovered = result.recover(IllegalArgumentException.class, (Supplier<String>) () -> "supplied");
+        assertTrue(recovered.isOk());
+        assertEquals("value", recovered.value());
+    }
+
+    @Test
     void should_throw_illegal_argument_when_recover_with_type_supplier_null() {
         Result<String, Exception> result = new Err<>(new RuntimeException());
         assertThrows(IllegalArgumentException.class, () -> result.recover(Exception.class, (Supplier<String>) null));
@@ -889,6 +959,14 @@ class ResultTest {
         Result<String, Exception> recovered = result.recover(IllegalArgumentException.class, (java.util.function.Function<Exception, String>) e -> "recovered: " + e.getMessage());
         assertTrue(recovered.isOk());
         assertEquals("recovered: error", recovered.value());
+    }
+
+    @Test
+    void should_recover_ok_with_type_and_function() {
+        Result<String, Exception> result = new Ok<>("value");
+        Result<String, Exception> recovered = result.recover(IllegalArgumentException.class, (java.util.function.Function<Exception, String>) e -> "recovered: " + e.getMessage());
+        assertTrue(recovered.isOk());
+        assertEquals("value", recovered.value());
     }
 
     @Test
@@ -1004,6 +1082,12 @@ class ResultTest {
     }
 
     @Test
+    void should_unwrap_or_with_supplier_on_ok() {
+        Result<String, Exception> result = new Ok<>("value");
+        assertEquals("value", result.unwrapOr((Supplier<String>) () -> "supplied"));
+    }
+
+    @Test
     void should_throw_illegal_argument_when_unwrap_or_supplier_null() {
         Result<String, Exception> result = new Err<>(new RuntimeException());
         assertThrows(IllegalArgumentException.class, () -> result.unwrapOr((Supplier<String>) null));
@@ -1019,6 +1103,14 @@ class ResultTest {
     void should_unwrap_checked_err_throws() {
         Result<String, Exception> result = new Err<>(new RuntimeException("error"));
         assertThrows(RuntimeException.class, result::unwrapChecked);
+    }
+
+    @Test
+    void should_recover_ok_with_function() {
+        Result<String, Exception> result = new Ok<>("value");
+        Result<String, Exception> recovered = result.recover((java.util.function.Function<Exception, String>) e -> "fallback");
+        assertTrue(recovered.isOk());
+        assertEquals("value", recovered.value());
     }
 
 }

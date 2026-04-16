@@ -2,16 +2,25 @@ package io.github.artkonr.result;
 
 import lombok.NonNull;
 
-class Remap {
+/**
+ * Internal remapping functions to support lombok auto-generated checks.
+ */
+final class Remap {
   
-  static <N, E extends Exception> Result<N, E> returnRemapped(@NonNull Result<N, E> val) {
-      return val;
-  }
-  
+  /**
+  * Wraps to add a lombok-generated check to the argument.
+  * @param <V> checked value type
+  * @param val checked value
+  * @return checked value
+ */
   static <V> V returnSupplied(@NonNull V val) {
       return val;
   }
-  
+ 
+  /**
+   * No-op constructor.
+  */
+  private Remap() { }
 }
 
 

@@ -226,6 +226,7 @@
                                     <excludes>
                                         <exclude>**/package-info.class</exclude>
                                         <exclude>**/*Test.class</exclude>
+                                        <exclude>**/*Internal.java</exclude>
                                     </excludes>
                                     <limits>
                                         <limit>
