@@ -13,7 +13,7 @@ jobs:
       - name: Setup JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
       - name: Pull GPG key
         uses: crazy-max/ghaction-import-gpg@v6

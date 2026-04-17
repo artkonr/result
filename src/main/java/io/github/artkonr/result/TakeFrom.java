@@ -3,46 +3,64 @@ package io.github.artkonr.result;
 import java.util.Optional;
 
 /**
- * A rule of how to combine results.
+ * Rule for selecting which error to return when combining multiple Results.
+ * <pre>{@code
+ * Result<Integer, IOException> a = new Err<>(new IOException("err1"));
+ * Result<String, IOException> b = new Err<>(new IOException("err2"));
+ *
+ * Result<Fuse<Integer, String>, IOException> fused1 = a.fuse(b, TakeFrom.HEAD);
+ * // Selects error from a ("err1")
+ *
+ * Result<Fuse<Integer, String>, IOException> fused2 = a.fuse(b, TakeFrom.TAIL);
+ * // Selects error from b ("err2")
+ * }</pre>
  */
 public enum TakeFrom {
 
     /**
-     * Instructs to take the first instance: either
-     * the first item in the collection or the the
-     * left item in the fuse.
+     * Select the error from the first Result (left/head).
+     * <p>When combining multiple errors, prefer the error that occurred first.
      */
     HEAD,
 
     /**
-     * Instructs to take the first instance: either
-     * the first item in the collection or the the
-     * right item in the fuse.
+     * Select the error from the second Result (right/tail).
+     * <p>When combining multiple errors, prefer the error that occurred second.
      */
     TAIL;
 
     /**
-     * Use the rule to derive which error is returned.
-     * @param head head
-     * @param tail tail
-     * @return picked error or empty optional
+     * Selects which error to return based on this rule.
+     * <pre>{@code
+     * Optional<IOException> error = TakeFrom.HEAD.takeError(
+     *   new Ok<>(1),
+     *   new Err<>(new IOException())
+     * );
+     * // Returns Optional.of(IOException)
+     * }</pre>
+     * @param head first result
+     * @param tail second result
+     * @return selected error, or empty if both are OK
+     * @param <V> head value type
+     * @param <N> tail value type
      * @param <E> error type
      */
-    <E extends Exception> Optional<E> takeError(BaseResult<E> head, BaseResult<E> tail) {
+    <V, N, E extends Exception> Optional<E> takeError(Result<V, E> head, Result<N, E> tail) {
+      
         if (head.isErr() && tail.isErr()) {
             E picked = switch (this) {
-                case HEAD -> head.error;
-                case TAIL -> tail.error;
+                case HEAD -> head.err();
+                case TAIL -> tail.err();
             };
             return Optional.of(picked);
         }
 
         if (head.isErr()) {
-            return Optional.of(head.error);
+            return Optional.of(head.err());
         }
 
         if (tail.isErr()) {
-            return Optional.of(tail.error);
+            return Optional.of(tail.err());
         }
 
         return Optional.empty();

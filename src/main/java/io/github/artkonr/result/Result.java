@@ -1,870 +1,1029 @@
 package io.github.artkonr.result;
 
-import lombok.NonNull;
-
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import lombok.NonNull;
+
 /**
- * A {@link BaseResult result} that contains a value (item) that is
- *  associated with the {@code OK} state.
- * @param <V> item type
- * @param <E> error type
+ * A container for the result of an operation that may succeed (OK) or fail (ERR).
+ * <p>Result supports functional error handling with transformations, recovery, and composition,
+ * along with imperative operations for checking state and extracting values.
+ * <pre>{@code
+ * // Wrap a fallible operation
+ * Result<String, IOException> result = Result.wrap(() ->
+ *   Files.readString(Paths.get("data.txt"))
+ * );
+ *
+ * // Chain transformations
+ * String output = result
+ *   .map(String::trim)
+ *   .map(String::toUpperCase)
+ *   .peek(System.out::println)
+ *   .recover("DEFAULT")
+ *   .value();
+ * }</pre>
+ * <p>The two sealed subtypes are:
+ * <ul>
+ *  <li>{@link Ok} - successful completion with a value</li>
+ *  <li>{@link Err} - failed completion with an exception</li>
+ * </ul>
+ * @param <V> type of value held by an OK result
+ * @param <E> type of exception held by an ERR result
  */
-public class Result<V, E extends Exception> extends BaseResult<E> {
-
-    /**
-     * Internally stored {@code OK} value. Not null.
-     */
-    protected final V item;
-
-    /**
-     * Runs a specified {@link Wrap.Supplier}, catches an expected exception
-     *  and returns it as a {@link Result}.
-     * <p>The expected exception can be any {@link Exception} type.
-     * <p>If no error is thrown by the supplied function, the call
-     *  resolves to {@code OK}.
-     * @param action fallible action
-     * @return result of the invocation
-     * @param <V> item type
-     * @throws IllegalArgumentException if either of the arguments not provided
-     *  or if the action returns a {@code null} value
-     */
-    public static <V> Result<V, Exception> wrap(@NonNull Wrap.Supplier<V> action) {
-        V val;
-        try {
-            val = action.get();
-        } catch (Exception ex) {
-            return Result.err(ex);
-        }
-
-        return Result.ok(val);
+public sealed interface Result<V, E extends Exception> permits Ok, Err {
+  
+  /**
+   * Wraps a fallible operation that may throw any exception.
+   * <pre>{@code
+   * Result<String, Exception> result = Result.wrap(() ->
+   *   Files.readString(Paths.get("file.txt"))
+   * );
+   * // Result is Ok("file content") or Err(IOException)
+   * }</pre>
+   * @param fn fallible operation
+   * @return OK with result or ERR with thrown exception
+   * @param <V> return type
+   * @throws IllegalArgumentException if operation is null or returns null
+   */
+  public static <V> Result<V, Exception> wrap(@NonNull Wrap.Supplier<V> fn) {
+    V val;
+    try {
+        val = fn.get();
+    } catch (Exception ex) {
+        return new Err<>(ex);
     }
 
-    /**
-     * Runs a specified {@link Wrap.Supplier}, catches an expected exception
-     *  and returns it as a {@link Result}.
-     * <p>The expected exception can be any {@link Exception} type,
-     *  this method internally checks if the caught exception type
-     *  matches the expected type or its subtype. Normally, the client
-     *  code should pass the narrowest type possible.
-     * <p>If no error is thrown by the supplied function, the call
-     *  resolves to {@code OK}.
-     * @param errType expected type
-     * @param action fallible action
-     * @return result of the invocation
-     * @param <V> item type
-     * @param <E> error type
-     * @throws IllegalArgumentException if either of the arguments not provided
-     *  or if the action returns a {@code null} value
-     * @throws IllegalStateException if the exception during invocation is not
-     *  of an expected type or its subtype
-     */
-    public static <V, E extends Exception> Result<V, E> wrap(@NonNull Class<E> errType,
-                                                             @NonNull Wrap.Supplier<@NonNull V> action) {
-        V item;
-        try {
-            item = action.get();
-        } catch (Exception exception) {
-            if (errType.isAssignableFrom(exception.getClass())) {
-                @SuppressWarnings("unchecked")
-                E cast = (E) exception;
-                return Result.err(cast);
+    return new Ok<>(val);
+  }
+  
+  /**
+   * Wraps a fallible operation, catching only expected exception types.
+   * <p>Throws {@code IllegalStateException} if an unexpected exception type is caught.
+   * <pre>{@code
+   * Result<Integer, IOException> result = Result.wrap(IOException.class, () ->
+   *   Integer.parseInt(Files.readString(Paths.get("number.txt")))
+   * );
+   * // Result is Ok(42), Err(IOException), or throws IllegalStateException on NumberFormatException
+   * }</pre>
+   * @param errType expected exception type
+   * @param fn fallible operation
+   * @return OK with result or ERR with thrown exception of expected type
+   * @param <V> return type
+   * @param <E> expected error type
+   * @throws IllegalArgumentException if any argument is null or operation returns null
+   * @throws IllegalStateException if caught exception doesn't match expected type
+   */
+  public static <V, E extends Exception> Result<V, E> wrap(
+    @NonNull Class<E> errType,
+    @NonNull Wrap.Supplier<@NonNull V> fn
+  ) {
+      V item;
+      try {
+          item = fn.get();
+      } catch (Exception exception) {
+          if (errType.isAssignableFrom(exception.getClass())) {
+              @SuppressWarnings("unchecked")
+              E cast = (E) exception;
+              return new Err<>(cast);
+          } else {
+              throw new IllegalStateException(
+                "unexpected wrapped exception: expected=%s actual=%s".formatted(
+                  errType.getName(),
+                  exception.getClass().getName()
+                )
+              );
+          }
+      }
+
+      return new Ok<>(item);
+  }
+  
+  /**
+   * Creates a copy of an existing Result.
+   * <pre>{@code
+   * Result<String, IOException> original = new Ok<>("data");
+   * Result<String, IOException> copy = Result.from(original);
+   * // copy is Ok("data")
+   * }</pre>
+   * @param source result to copy
+   * @return new result with same state as source
+   * @param <V> value type
+   * @param <E> error type
+   * @throws IllegalArgumentException if source is null
+   */
+  public static <V, E extends Exception> Result<V, E> from(@NonNull Result<V, E> source) {
+    return switch (source) {
+      case Ok(var item) -> new Ok<>(item);
+      case Err(var item) -> new Err<>(item);
+    };
+  }
+  
+  /**
+   * Chains multiple Result-producing operations, short-circuiting on the first error.
+   * <pre>{@code
+   * Result<List<Integer>, IOException> result = Result.chain(Arrays.asList(
+   *   () -> new Ok<>(1),
+   *   () -> new Ok<>(2),
+   *   () -> new Ok<>(3)
+   * ));
+   * // Result is Ok([1, 2, 3])
+   *
+   * Result<List<Integer>, IOException> failed = Result.chain(Arrays.asList(
+   *   () -> new Ok<>(1),
+   *   () -> new Err<>(new IOException()),
+   *   () -> new Ok<>(3)
+   * ));
+   * // Result is Err(IOException) - short-circuited at second operation
+   * }</pre>
+   * @param invocations operations to invoke in sequence
+   * @return OK with list of all values, or ERR from first failed operation
+   * @param <V> value type
+   * @param <E> error type
+   * @throws IllegalArgumentException if invocations is null
+   */
+  public static <V, E extends Exception> Result<List<V>, E> chain(@NonNull Collection<Supplier<Result<V, E>>> invocations) {
+    List<Supplier<Result<V, E>>> filtered = invocations.stream()
+      .filter(it -> it != null)
+      .toList();
+    List<V> ok = new ArrayList<>();
+    if (!filtered.isEmpty()) {
+        Iterator<Supplier<Result<V, E>>> iterator = filtered.iterator();
+        E err = null;
+        while (iterator.hasNext()) {
+            Result<V, E> curr = iterator.next().get();
+            
+            if (curr == null) {
+                continue;
+            }
+
+            if (curr.isOk()) {
+                ok.add(curr.value());
             } else {
-                throw BaseResult.unexpectedWrappedException(errType, exception);
+                err = curr.err();
+                break;
             }
         }
 
-        return Result.ok(item);
-    }
-
-    /**
-     * Creates a new instance from an existing {@link Result result}.
-     *  The {@code OK}/{@code ERR} state is taken from the source entity.
-     * <p>Note: as {@link Result} must contain an item in {@code OK}
-     *  state, only {@link Result} is allowed as input.
-     * @param source source {@link BaseResult result}
-     * @return new instance
-     * @param <V> item type
-     * @param <E> error type
-     * @throws IllegalArgumentException if no argument provided
-     */
-    public static <V, E extends Exception> Result<V, E> from(@NonNull Result<V, E> source) {
-        if (source.isOk()) {
-            return Result.ok(source.item);
+        if (err == null) {
+            return new Ok<>(ok);
         } else {
-            return Result.err(source.error);
+            return new Err<>(err);
         }
+    } else {
+        return new Ok<>(ok);
     }
-
-    /**
-     * Creates an {@code OK} item with item.
-     * @return new {@code OK} instance
-     * @param item ok item
-     * @param <V> item type
-     * @param <E> error type
-     * @throws IllegalArgumentException if no argument provided
-     */
-    public static <V, E extends Exception> Result<V, E> ok(@NonNull V item) {
-        return new Result<>(item, null);
+  }
+  
+  /**
+   * Combines multiple Results into a single Result containing a list.
+   * <p>Returns OK with all values if all Results are OK, otherwise ERR using the specified rule.
+   * <pre>{@code
+   * List<Result<Integer, IOException>> results = Arrays.asList(
+   *   new Ok<>(1),
+   *   new Ok<>(2),
+   *   new Ok<>(3)
+   * );
+   * Result<List<Integer>, IOException> joined = Result.join(results, TakeFrom.HEAD);
+   * // Result is Ok([1, 2, 3])
+   *
+   * List<Result<Integer, IOException>> withError = Arrays.asList(
+   *   new Ok<>(1),
+   *   new Err<>(new IOException("first")),
+   *   new Err<>(new IOException("second"))
+   * );
+   * Result<List<Integer>, IOException> joined = Result.join(withError, TakeFrom.HEAD);
+   * // Result is Err(IOException("first"))
+   * }</pre>
+   * @param results collection of results to combine
+   * @param rule which error to return if multiple errors exist (HEAD=first, TAIL=last)
+   * @return OK with list of values, or ERR from selected error
+   * @param <V> value type
+   * @param <E> error type
+   * @throws IllegalArgumentException if any argument is null
+   */
+  public static <V, E extends Exception> Result<List<V>, E> join(@NonNull Collection<Result<V, E>> results,
+                                                                 @NonNull TakeFrom rule) {
+    List<Result<V, E>> nonNull = results.stream()
+      .filter(it -> it != null)
+      .toList();
+    List<Result<V, E>> errored = nonNull.stream()
+      .filter(it -> it.isErr())
+      .toList();
+    if (!errored.isEmpty()) {
+        Result<V, E> result = switch (rule) {
+            case HEAD -> errored.getFirst();
+            case TAIL -> errored.getLast();
+        };
+        return new Err<>(result.err());
+    } else {
+        return new Ok<>(nonNull.stream()
+          .map(result -> result.value())
+          .toList()
+        );
+      }
+  }
+  
+  /**
+   * Converts Result&lt;Optional&lt;V&gt;, E&gt; to Optional&lt;Result&lt;V, E&gt;&gt;.
+   * <pre>{@code
+   * Result<Optional<String>, IOException> result = new Ok<>(Optional.of("data"));
+   * Optional<Result<String, IOException>> elevated = Result.elevate(result);
+   * // elevated is Optional.of(Ok("data"))
+   *
+   * Result<Optional<String>, IOException> empty = new Ok<>(Optional.empty());
+   * Optional<Result<String, IOException>> elevated = Result.elevate(empty);
+   * // elevated is Optional.empty()
+   *
+   * Result<Optional<String>, IOException> err = new Err<>(new IOException());
+   * Optional<Result<String, IOException>> elevated = Result.elevate(err);
+   * // elevated is Optional.of(Err(IOException))
+   * }</pre>
+   * @param result result containing an optional value
+   * @return optional containing a result
+   * @param <V> value type
+   * @param <E> error type
+   * @throws IllegalArgumentException if result is null
+   */
+  public static <V, E extends Exception> Optional<Result<V, E>> elevate(@NonNull Result<Optional<V>, E> result) {
+    return switch (result) {
+      case Ok(var item) -> item.map(it -> new Ok<>(it));
+      case Err(var item) -> Optional.of(new Err<>(item));
+    };
+  }
+  
+  /**
+   * Checks if this result is successful (OK).
+   * <pre>{@code
+   * Result<String, IOException> ok = new Ok<>("success");
+   * ok.isOk(); // true
+   *
+   * Result<String, IOException> err = new Err<>(new IOException());
+   * err.isOk(); // false
+   * }</pre>
+   * @return {@code true} if this is an OK result
+   */
+  default boolean isOk() {
+    return this instanceof Ok;
+  }
+  
+  /**
+   * Checks if this result is OK and the value satisfies the predicate.
+   * <pre>{@code
+   * Result<Integer, IOException> ok = new Ok<>(42);
+   * ok.isOkAnd(v -> v > 0); // true
+   * ok.isOkAnd(v -> v < 0); // false
+   *
+   * Result<Integer, IOException> err = new Err<>(new IOException());
+   * err.isOkAnd(v -> v > 0); // false
+   * }</pre>
+   * @param cond predicate to test the value
+   * @return {@code true} if OK and predicate holds
+   * @throws IllegalArgumentException if predicate is null
+   */
+  default boolean isOkAnd(@NonNull Predicate<V> cond) {
+    return switch (this) {
+      case Ok(var item) -> cond.test(item);
+      case Err(var ignored) -> false;
+    };
+  }
+  
+  /**
+   * Checks if this result is failed (ERR).
+   * <pre>{@code
+   * Result<String, IOException> err = new Err<>(new IOException());
+   * err.isErr(); // true
+   *
+   * Result<String, IOException> ok = new Ok<>("success");
+   * ok.isErr(); // false
+   * }</pre>
+   * @return {@code true} if this is an ERR result
+   */
+  default boolean isErr() {
+    return this instanceof Err;
+  }
+  
+  /**
+   * Checks if this result is ERR and the error is of the specified type or subtype.
+   * <pre>{@code
+   * Result<String, IOException> err = new Err<>(new IOException());
+   * err.isErrAnd(IOException.class); // true
+   * err.isErrAnd(Exception.class); // true (parent type)
+   * err.isErrAnd(FileNotFoundException.class); // false
+   *
+   * Result<String, IOException> ok = new Ok<>("success");
+   * ok.isErrAnd(IOException.class); // false
+   * }</pre>
+   * @param type expected exception type
+   * @return {@code true} if ERR and error matches type
+   * @throws IllegalArgumentException if type is null
+   */
+  default boolean isErrAnd(@NonNull Class<? extends Exception> type) {
+    if (this instanceof Err err) {
+      return type.isAssignableFrom(err.item().getClass());
+    } else {
+      return false;
     }
+  }
+  
+  /**
+   * Checks if this result is ERR and the error satisfies the predicate.
+   * <pre>{@code
+   * Result<String, IOException> err = new Err<>(new IOException("disk full"));
+   * err.isErrAnd(e -> e.getMessage().contains("disk")); // true
+   * err.isErrAnd(e -> e.getMessage().contains("network")); // false
+   * }</pre>
+   * @param cond predicate to test the error
+   * @return {@code true} if ERR and predicate holds
+   * @throws IllegalArgumentException if predicate is null
+   */
+  default boolean isErrAnd(@NonNull Predicate<E> cond) {
+    return switch (this) {
+      case Err(var item) when cond.test(item) -> true;
+      default -> false;
+    };
+  }
+  
+  /**
+   * Transforms the OK value, or passes through the ERR unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> ok = new Ok<>(5);
+   * Result<String, IOException> mapped = ok.map(n -> "Value: " + n);
+   * // Result is Ok("Value: 5")
+   *
+   * Result<Integer, IOException> err = new Err<>(new IOException());
+   * Result<String, IOException> mapped = err.map(n -> "Value: " + n);
+   * // Result is Err(IOException) - unchanged
+   * }</pre>
+   * @param fn function to apply to OK value
+   * @return new Result with transformed OK value or same ERR
+   * @param <N> new value type
+   * @throws IllegalArgumentException if function is null or returns null
+   */
+  default <N> Result<N, E> map(@NonNull Function<V, N> fn) {
+    return switch (this) {
+      case Ok(var item) -> new Ok<>(fn.apply(item));
+      case Err(var ignored) -> new Err<>(ignored);
+    };
+  }
+  
+  /**
+   * Replaces the OK value, or passes through the ERR unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> ok = new Ok<>(5);
+   * Result<String, IOException> swapped = ok.swap("replaced");
+   * // Result is Ok("replaced")
+   * }</pre>
+   * @param item replacement value
+   * @return new OK result with replacement value, or same ERR
+   * @param <N> new value type
+   * @throws IllegalArgumentException if item is null
+   */
+  default <N> Result<N, E> swap(@NonNull N item) {
+    return map(ignored -> item);
+  }
+  
+  /**
+   * Replaces the OK value using a supplier, or passes through the ERR unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> ok = new Ok<>(5);
+   * Result<String, IOException> swapped = ok.swap(() -> "computed");
+   * // Result is Ok("computed")
+   * }</pre>
+   * @param fn supplier for replacement value
+   * @return new OK result with supplied value, or same ERR
+   * @param <N> new value type
+   * @throws IllegalArgumentException if supplier is null
+   */
+  default <N> Result<N, E> swap(@NonNull Supplier<N> fn) {
+    return swap(Remap.returnSupplied(fn.get()));
+  }
+  
+  /**
+   * Replaces the ERR error, or passes through the OK unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> err = new Err<>(new IOException());
+   * Result<Integer, RuntimeException> stacked = err.stack(new RuntimeException("new"));
+   * // Result is Err(RuntimeException)
+   *
+   * Result<Integer, IOException> ok = new Ok<>(5);
+   * Result<Integer, RuntimeException> stacked = ok.stack(new RuntimeException("new"));
+   * // Result is Ok(5) - unchanged
+   * }</pre>
+   * @param repl replacement error
+   * @return new ERR result with replacement error, or same OK
+   * @param <N> new error type
+   * @throws IllegalArgumentException if error is null
+   */
+  default <N extends Exception> Result<V, N> stack(@NonNull N repl) {
+    return switch (this) {
+      case Ok(var item) -> new Ok<>(item);
+      case Err(var item) -> new Err<>(repl);
+    };
+  }
 
-    /**
-     * Creates an {@code ERR} item with the provided error.
-     * @param error error
-     * @return new {@code ERR} instance
-     * @param <V> item type
-     * @param <E> error type
-     * @throws IllegalArgumentException if no argument provided
-     */
-    public static <V, E extends Exception> Result<V, E> err(@NonNull E error) {
-        return new Result<>(null, error);
+  /**
+   * Transforms the ERR error using a function, or passes through the OK unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> err = new Err<>(new IOException("read failed"));
+   * Result<Integer, RuntimeException> stacked = err.stack(ex -> new RuntimeException(ex.getMessage()));
+   * // Result is Err(RuntimeException("read failed"))
+   * }</pre>
+   * @param fn function to transform error
+   * @return new ERR with transformed error, or same OK
+   * @param <N> new error type
+   * @throws IllegalArgumentException if function is null
+   */
+  default <N extends Exception> Result<V, N> stack(@NonNull Function<E, N> fn) {
+    return switch (this) {
+      case Ok(var item) -> new Ok<>(item);
+      case Err(var item) -> new Err<>(fn.apply(item));
+    };
+  }
+
+  /**
+   * Replaces the ERR error using a supplier, or passes through the OK unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> err = new Err<>(new IOException());
+   * Result<Integer, RuntimeException> stacked = err.stack(() -> new RuntimeException("fallback"));
+   * // Result is Err(RuntimeException("fallback"))
+   * }</pre>
+   * @param fn supplier for replacement error
+   * @return new ERR with supplied error, or same OK
+   * @param <N> new error type
+   * @throws IllegalArgumentException if supplier is null
+   */
+  default <N extends Exception> Result<V, N> stack(@NonNull Supplier<N> fn) {
+    return switch (this) {
+      case Ok(var item) -> new Ok<>(item);
+      case Err(var item) -> new Err<>(fn.get());
+    };
+  }
+  
+  /**
+   * Widens the error type to the base {@link Exception} type.
+   * <pre>{@code
+   * Result<String, IOException> result = new Ok<>("data");
+   * Result<String, Exception> upcasted = result.upcast();
+   * }</pre>
+   * @return result with error type widened to Exception
+   */
+  default Result<V, Exception> upcast() {
+    return switch (this) {
+      case Ok(var item) -> new Ok<>(item);
+      case Err(var item) -> new Err<>(item);
+    };
+  }
+  
+  /**
+   * Chains Result-returning operations, flattening nested Results.
+   * <pre>{@code
+   * Result<Integer, IOException> ok = new Ok<>(5);
+   * Result<String, IOException> chained = ok.flatMap(n ->
+   *   new Ok<>("number: " + n)
+   * );
+   * // Result is Ok("number: 5")
+   *
+   * Result<String, IOException> flatMapped = chained.flatMap(s ->
+   *   new Err<>(new IOException("failed"))
+   * );
+   * // Result is Err(IOException)
+   * }</pre>
+   * @param fn function returning a Result
+   * @return flattened Result
+   * @param <N> new value type
+   * @throws IllegalArgumentException if function is null
+   */
+  default <N> Result<N, E> flatMap(@NonNull Function<V, Result<N, E>> fn) {
+    return switch (this) {
+      case Ok(var item) -> Remap.returnSupplied(fn.apply(item));
+      case Err(var ignored) -> new Err<>(ignored);
+    };
+  }
+  
+  /**
+   * Combines two Results into a Fuse containing both OK values, preferring the first error.
+   * <pre>{@code
+   * Result<Integer, IOException> a = new Ok<>(5);
+   * Result<String, IOException> b = new Ok<>("hello");
+   * Result<Fuse<Integer, String>, IOException> fused = a.fuse(b);
+   * // Result is Ok(Fuse(5, "hello"))
+   *
+   * Result<Integer, IOException> c = new Ok<>(5);
+   * Result<String, IOException> d = new Err<>(new IOException());
+   * Result<Fuse<Integer, String>, IOException> fused = c.fuse(d);
+   * // Result is Err(IOException) - from d
+   * }</pre>
+   * @param another second result to combine
+   * @return OK with both values in a Fuse, or first error
+   * @param <N> second value type
+   * @throws IllegalArgumentException if other result is null
+   */
+  default <N> Result<Fuse<V, N>, E> fuse(@NonNull Result<N, E> another) {
+    return fuse(another, TakeFrom.HEAD);
+  }
+
+  /**
+   * Combines two Results into a Fuse containing both OK values.
+   * <pre>{@code
+   * Result<Integer, IOException> a = new Ok<>(5);
+   * Result<String, IOException> b = new Err<>(new IOException("err1"));
+   * Result<String, IOException> c = new Err<>(new IOException("err2"));
+   * Result<Fuse<Integer, String>, IOException> fused = a.fuse(b, TakeFrom.TAIL);
+   * // Result is Err(IOException) - from b
+   *
+   * Result<Fuse<Integer, String>, IOException> fused = b.fuse(c, TakeFrom.TAIL);
+   * // Result is Err(IOException) - from c (TAIL)
+   * }</pre>
+   * @param another second result to combine
+   * @param errFrom which error to prefer (HEAD=first, TAIL=second)
+   * @return OK with both values in a Fuse, or selected error
+   * @param <N> second value type
+   * @throws IllegalArgumentException if any argument is null
+   */
+  default <N> Result<Fuse<V, N>, E> fuse(@NonNull Result<N, E> another, @NonNull TakeFrom errFrom) {
+    return errFrom
+      .takeError(this, another)
+      .<Result<Fuse<V, N>, E>>map(it -> new Err<>(it))
+      .orElseGet(() -> new Ok<>(new Fuse<>(this.value(), another.value())));
+  }
+  
+  /**
+   * Executes a side-effect on the OK value and returns this result unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> ok = new Ok<>(42);
+   * ok.peek(System.out::println) // prints 42
+   *   .map(x -> x * 2);
+   * }</pre>
+   * @param fn side-effect to execute
+   * @return this result unchanged
+   * @throws IllegalArgumentException if function is null
+   */
+  default Result<V, E> peek(@NonNull Consumer<V> fn) {
+    return switch (this) {
+      case Ok(var item) -> {
+        fn.accept(item);
+        yield this;
+      }
+      case Err(var ignored) -> this;
+    };
+  }
+
+  /**
+   * Executes a side-effect on the OK value if predicate holds, returns this unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> ok = new Ok<>(42);
+   * ok.peek(x -> x > 0, System.out::println) // prints 42
+   *   .peek(x -> x < 0, System.out::println); // skipped
+   * }</pre>
+   * @param cond predicate to test the value
+   * @param fn side-effect to execute
+   * @return this result unchanged
+   * @throws IllegalArgumentException if any argument is null
+   */
+  default Result<V, E> peek(@NonNull Predicate<V> cond, @NonNull Consumer<V> fn) {
+    return switch (this) {
+      case Ok(var item) when cond.test(item) -> {
+        fn.accept(item);
+        yield this;
+      }
+      default -> this;
+    };
+  }
+  
+  /**
+   * Executes a side-effect on the ERR error and returns this result unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> err = new Err<>(new IOException("disk full"));
+   * err.inspect(e -> System.err.println("Error: " + e.getMessage()));
+   * }</pre>
+   * @param fn side-effect to execute
+   * @return this result unchanged
+   * @throws IllegalArgumentException if function is null
+   */
+  default Result<V, E> inspect(@NonNull Consumer<E> fn) {
+    return switch (this) {
+      case Ok(var ignored) -> this;
+      case Err(var item) -> {
+        fn.accept(item);
+        yield this;
+      }
+    };
+  }
+
+  /**
+   * Executes a side-effect on the ERR error if predicate holds, returns this unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> err = new Err<>(new IOException("timeout"));
+   * err.inspect(e -> e.getMessage().contains("timeout"), System.err::println);
+   * }</pre>
+   * @param cond predicate to test the error
+   * @param fn side-effect to execute
+   * @return this result unchanged
+   * @throws IllegalArgumentException if any argument is null
+   */
+  default Result<V, E> inspect(@NonNull Predicate<E> cond, @NonNull Consumer<E> fn) {
+    return switch (this) {
+      case Err(var item) when cond.test(item) -> {
+        fn.accept(item);
+        yield this;
+      }
+      default -> this;
+    };
+  }
+
+  /**
+   * Executes a side-effect on the ERR error if it matches the type, returns this unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> err = new Err<>(new FileNotFoundException("not found"));
+   * err.inspect(FileNotFoundException.class, e -> log.warn("File missing: " + e.getMessage()));
+   * }</pre>
+   * @param type exception type to match
+   * @param fn side-effect to execute
+   * @return this result unchanged
+   * @throws IllegalArgumentException if any argument is null
+   */
+  default Result<V, E> inspect(@NonNull Class<? extends Exception> type, @NonNull Consumer<E> fn) {
+    return switch (this) {
+      case Err(var item) when type.isAssignableFrom(item.getClass()) -> {
+        fn.accept(item);
+        yield this;
+      }
+      default -> this;
+    };
+  }
+  
+  /**
+   * Converts an OK result to ERR with the given error, or passes through ERR unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> ok = new Ok<>(5);
+   * Result<Integer, IOException> tainted = ok.taint(new IOException("validation failed"));
+   * // Result is Err(IOException("validation failed"))
+   * }</pre>
+   * @param item error to inject
+   * @return new ERR with given error, or same ERR
+   * @throws IllegalArgumentException if error is null
+   */
+  default Result<V, E> taint(@NonNull E item) {
+    if (isOk()) {
+      return new Err<>(item);
+    } else {
+      return this;
     }
+  }
 
-    /**
-     * Invokes {@link Result}-producing functions in a serialized
-     *  manner and short-circuits upon the first encountered {@code
-     *  ERR} result. Encountered {@code null} elements are ignored.
-     * <p>This method takes the input collection as-is, the invocations
-     *  are made in the order they appear in the collection.
-     * @param invocations operations to invoke
-     * @return if either of the invocations short-circuits, an {@code ERR}
-     *  result is returned. If all invocations succeed, a collection
-     *  of resulting items is returned.
-     * @param <V> item type
-     * @param <E> error type
-     * @throws IllegalArgumentException if no argument provided
-     */
-    public static <V, E extends Exception> Result<List<V>, E> chain(@NonNull Collection<Supplier<Result<V, E>>> invocations) {
-        List<Supplier<Result<V, E>>> filtered = invocations.stream()
-                .filter(Objects::nonNull)
-                .toList();
-        List<V> ok = new ArrayList<>();
-        if (!filtered.isEmpty()) {
-            Iterator<Supplier<Result<V, E>>> iterator = filtered.iterator();
-            E err = null;
-            while (iterator.hasNext()) {
-                Result<V, E> curr = iterator.next().get();
-                if (curr == null) {
-                    continue;
-                }
-
-                if (curr.isOk()) {
-                    ok.add(curr.item);
-                } else {
-                    err = curr.error;
-                    break;
-                }
-            }
-
-            if (err == null) {
-                return Result.ok(ok);
-            } else {
-                return err(err);
-            }
-        } else {
-            return Result.ok(ok);
-        }
+  /**
+   * Converts an OK result to ERR if predicate holds, or passes through unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> ok = new Ok<>(-5);
+   * Result<Integer, IOException> tainted = ok.taint(x -> x < 0, new IOException("negative"));
+   * // Result is Err(IOException("negative"))
+   * }</pre>
+   * @param cond predicate to test the value
+   * @param item error to inject
+   * @return new ERR if OK and predicate holds, otherwise unchanged
+   * @throws IllegalArgumentException if any argument is null
+   */
+  default Result<V, E> taint(@NonNull Predicate<V> cond, @NonNull E item) {
+    if (isOkAnd(cond)) {
+      return new Err<>(item);
+    } else {
+      return this;
     }
-
-    /**
-     * Joins a {@link Collection} of {@link Result} objects into
-     *  a {@link Result} of {@link List} of items.
-     * <p>The eventual {@link Result} will have the {@code OK} state
-     *  iff. all {@link Result source results} are {@code OK}. Otherwise,
-     *  the internal error of the fist occurring {@code ERR} result is taken.
-     * <p>As {@link Collection} does not specify the ordering, the eventual
-     *  {@link Result} is not guaranteed to contain the same internal
-     *  error state every time.
-     * <p>Null-safe: should the input contain {@code null} items,
-     *  this method will remove them.
-     * @param results collection of {@link Result results}
-     * @return results joined into a {@link Result}
-     * @param <V> item type
-     * @param <E> error type
-     * @throws IllegalArgumentException if no argument provided
-     */
-    public static <V, E extends Exception> Result<List<V>, E> join(@NonNull Collection<Result<V, E>> results) {
-        return join(results, TakeFrom.HEAD);
+  }
+  
+  /**
+   * Converts an ERR result to OK with the given value, or passes through OK unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> err = new Err<>(new IOException());
+   * Result<Integer, IOException> recovered = err.recover(0);
+   * // Result is Ok(0)
+   * }</pre>
+   * @param item replacement value
+   * @return new OK with given value, or same OK
+   * @throws IllegalArgumentException if item is null
+   */
+  default Result<V, E> recover(@NonNull V item) {
+    if (isErr()) {
+      return new Ok<>(item);
+    } else {
+      return this;
     }
+  }
 
-    /**
-     * Joins a {@link Collection} of {@link Result} objects into
-     *  a {@link Result} of {@link List} of items.
-     * <p>The eventual {@link Result} will have the {@code OK} state
-     *  iff. all {@link Result source results} are {@code OK}. Otherwise,
-     *  the internal error of is taken as described by {@link TakeFrom}.
-     * <p>As {@link Collection} does not specify the ordering, the eventual
-     *  {@link Result} is not guaranteed to contain the same internal
-     *  error state every time.
-     * <p>Null-safe: should the input contain {@code null} items,
-     *  this method will remove them.
-     * @param results collection of {@link Result results}
-     * @param rule fusing rule
-     * @return results joined into a {@link Result}
-     * @param <V> item type
-     * @param <E> error type
-     * @throws IllegalArgumentException if no argument provided
-     */
-    public static <V, E extends Exception> Result<List<V>, E> join(@NonNull Collection<Result<V, E>> results,
-                                                                   @NonNull TakeFrom rule) {
-        List<Result<V, E>> nonNull = results.stream()
-                .filter(Objects::nonNull)
-                .toList();
-        List<Result<V, E>> errored = nonNull.stream()
-                .filter(BaseResult::isErr)
-                .toList();
-        if (!errored.isEmpty()) {
-            Result<V, E> result = switch (rule) {
-                case HEAD -> errored.get(0);
-                case TAIL -> errored.get(errored.size() - 1);
-            };
-            return Result.err(result.error);
-        } else {
-            return Result.ok(nonNull.stream()
-                    .map(result -> result.item)
-                    .toList());
-        }
+  /**
+   * Converts an ERR result to OK using a supplier, or passes through OK unchanged.
+   * <pre>{@code
+   * Result<List<String>, IOException> err = new Err<>(new IOException());
+   * Result<List<String>, IOException> recovered = err.recover(() -> Collections.emptyList());
+   * // Result is Ok([])
+   * }</pre>
+   * @param fn supplier for replacement value
+   * @return new OK with supplied value, or same OK
+   * @throws IllegalArgumentException if supplier is null
+   */
+  default Result<V, E> recover(@NonNull Supplier<V> fn) {
+    return recover(fn.get());
+  }
+
+  /**
+   * Converts an ERR result to OK by transforming the error, or passes through OK unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> err = new Err<>(new IOException("number format"));
+   * Result<Integer, IOException> recovered = err.recover(e -> 42);
+   * // Result is Ok(42)
+   * }</pre>
+   * @param fn function to transform error to value
+   * @return new OK with transformed value, or same OK
+   * @throws IllegalArgumentException if function is null
+   */
+  default Result<V, E> recover(@NonNull Function<E, V> fn) {
+    return switch (this) {
+      case Ok(var item) -> this;
+      case Err(var item) -> recover(fn.apply(item));
+    };
+  }
+
+  /**
+   * Converts an ERR matching a predicate to OK with given value, or passes through unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> err = new Err<>(new IOException("timeout"));
+   * Result<Integer, IOException> recovered = err.recover(
+   *   e -> e.getMessage().contains("timeout"),
+   *   0
+   * );
+   * // Result is Ok(0)
+   * }</pre>
+   * @param cond predicate to test the error
+   * @param item replacement value
+   * @return new OK if ERR and predicate holds, otherwise unchanged
+   * @throws IllegalArgumentException if any argument is null
+   */
+  default Result<V, E> recover(@NonNull Predicate<E> cond, @NonNull V item) {
+    if (isErrAnd(cond)) {
+      return new Ok<>(item);
+    } else {
+      return this;
     }
+  }
 
-    /**
-     * Takes an {@link Optional} out of an {@code OK} {@link Result}
-     *  and wraps the said {@link Result} into an {@link Optional}.
-     * <p>The wrapped {@link Result} retains the state of the input.
-     * <p>The wrapping {@link Optional} retains the state of the input.
-     * @param result {@link Result} bearing an {@link Optional} object to elevate
-     * @return {@link Result} wrapped in {@link Optional}
-     * @param <V> item type
-     * @param <E> error type
-     */
-    public static <V, E extends Exception> Optional<Result<V, E>> elevate(@NonNull Result<Optional<V>, E> result) {
-        if (result.isOk()) {
-            return result.get().map(Result::ok);
-        } else {
-            return Optional.of(Result.err(result.error));
-        }
+  /**
+   * Converts an ERR matching a predicate to OK using a supplier, or passes through unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> err = new Err<>(new IOException("timeout"));
+   * Result<Integer, IOException> recovered = err.recover(
+   *   e -> e.getMessage().contains("timeout"),
+   *   () -> 0
+   * );
+   * // Result is Ok(0)
+   * }</pre>
+   * @param cond predicate to test the error
+   * @param fn supplier for replacement value
+   * @return new OK if ERR and predicate holds, otherwise unchanged
+   * @throws IllegalArgumentException if any argument is null
+   */
+  default Result<V, E> recover(@NonNull Predicate<E> cond, @NonNull Supplier<V> fn) {
+    return recover(cond, fn.get());
+  }
+
+  /**
+   * Converts an ERR matching a predicate to OK by transforming error, or passes through unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> err = new Err<>(new IOException("oops"));
+   * Result<Integer, IOException> recovered = err.recover(
+   *   e -> e.getMessage().contains("oops"),
+   *   e -> 99
+   * );
+   * // Result is Ok(99)
+   * }</pre>
+   * @param cond predicate to test the error
+   * @param fn function to transform error to value
+   * @return new OK if ERR and predicate holds, otherwise unchanged
+   * @throws IllegalArgumentException if any argument is null
+   */
+  default Result<V, E> recover(@NonNull Predicate<E> cond, @NonNull Function<E, V> fn) {
+    return switch (this) {
+      case Err(var item) when cond.test(item) -> recover(fn);
+      default -> this;
+    };
+  }
+
+  /**
+   * Converts an ERR of a specific type to OK with given value, or passes through unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> err = new Err<>(new FileNotFoundException());
+   * Result<Integer, IOException> recovered = err.recover(FileNotFoundException.class, 0);
+   * // Result is Ok(0)
+   *
+   * Result<Integer, IOException> other = new Err<>(new IOException());
+   * Result<Integer, IOException> unchanged = other.recover(FileNotFoundException.class, 0);
+   * // Result is Err(IOException) - unchanged
+   * }</pre>
+   * @param type exception type to match
+   * @param item replacement value
+   * @return new OK if ERR matches type, otherwise unchanged
+   * @throws IllegalArgumentException if any argument is null
+   */
+  default Result<V, E> recover(@NonNull Class<? extends Exception> type, @NonNull V item) {
+    if (isErrAnd(type)) {
+      return new Ok<>(item);
+    } else {
+      return this;
     }
+  }
 
-    /**
-     * Checks if {@code this} instance is {@code OK}
-     *  and the specified predicate holds.
-     * @param predicate predicate
-     * @return {@code true} if {@code this} is an {@code OK}
-     *  result and the predicate holds
-     * @throws IllegalArgumentException if no argument provided
-     */
-    public boolean isOkAnd(@NonNull Predicate<V> predicate) {
-        return isOk() && predicate.test(item);
+  /**
+   * Converts an ERR of a specific type to OK using a supplier, or passes through unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> err = new Err<>(new FileNotFoundException());
+   * Result<Integer, IOException> recovered = err.recover(
+   *   FileNotFoundException.class,
+   *   () -> 0
+   * );
+   * // Result is Ok(0)
+   * }</pre>
+   * @param type exception type to match
+   * @param fn supplier for replacement value
+   * @return new OK if ERR matches type, otherwise unchanged
+   * @throws IllegalArgumentException if any argument is null
+   */
+  default Result<V, E> recover(@NonNull Class<? extends Exception> type, @NonNull Supplier<V> fn) {
+    return recover(type, fn.get());
+  }
+
+  /**
+   * Converts an ERR of a specific type to OK by transforming error, or passes through unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> err = new Err<>(new FileNotFoundException("missing.txt"));
+   * Result<Integer, IOException> recovered = err.recover(
+   *   FileNotFoundException.class,
+   *   e -> 0
+   * );
+   * // Result is Ok(0)
+   * }</pre>
+   * @param type exception type to match
+   * @param fn function to transform error to value
+   * @return new OK if ERR matches type, otherwise unchanged
+   * @throws IllegalArgumentException if any argument is null
+   */
+  default Result<V, E> recover(@NonNull Class<? extends Exception> type, @NonNull Function<E, V> fn) {
+    return switch (this) {
+      case Err(var item) when type.isAssignableFrom(item.getClass()) -> recover(fn);
+      default -> this;
+    };
+  }
+  
+  /**
+   * Extracts the value from an OK result.
+   * <pre>{@code
+   * Result<String, IOException> ok = new Ok<>("data");
+   * String value = ok.value(); // "data"
+   * }</pre>
+   * @return the OK value
+   * @throws IllegalStateException if this is an ERR result
+   */
+  default V value() {
+    return switch (this) {
+      case Ok(var item) -> item;
+      default -> throw new IllegalStateException("not an OK result");
+    };
+  }
+
+  /**
+   * Extracts the error from an ERR result.
+   * <pre>{@code
+   * Result<String, IOException> err = new Err<>(new IOException("read failed"));
+   * IOException error = err.err(); // IOException
+   * }</pre>
+   * @return the ERR error
+   * @throws IllegalStateException if this is an OK result
+   */
+  default E err() {
+    return switch (this) {
+      case Err(var item) -> item;
+      default -> throw new IllegalStateException("not an ERR result");
+    };
+  }
+
+  /**
+   * Executes an action if this is OK, does nothing if ERR.
+   * <pre>{@code
+   * Result<String, IOException> ok = new Ok<>("data");
+   * ok.ifOk(data -> System.out.println("Got: " + data)); // prints
+   *
+   * Result<String, IOException> err = new Err<>(new IOException());
+   * err.ifOk(data -> System.out.println("Got: " + data)); // no-op
+   * }</pre>
+   * @param fn action to execute with OK value
+   * @throws IllegalArgumentException if function is null
+   */
+  default void ifOk(@NonNull Consumer<V> fn) {
+    if (isOk()) {
+      fn.accept(value());
     }
+  }
 
-    /**
-     * Attempts to get {@code OK} state or throws
-     *  if {@code this} instance is {@code ERR}.
-     * @return {@code OK} item
-     * @throws IllegalStateException if {@code this}
-     *  instance is {@code ERR}
-     */
-    public V get() {
-        if (isOk()) {
-            return item;
-        }
-
-        throw new IllegalStateException("not an OK result");
+  /**
+   * Executes an action if this is ERR, does nothing if OK.
+   * <pre>{@code
+   * Result<String, IOException> err = new Err<>(new IOException());
+   * err.ifErr(e -> System.err.println("Error: " + e.getMessage())); // prints
+   *
+   * Result<String, IOException> ok = new Ok<>("data");
+   * ok.ifErr(e -> System.err.println("Error: " + e.getMessage())); // no-op
+   * }</pre>
+   * @param fn action to execute with ERR error
+   * @throws IllegalArgumentException if function is null
+   */
+  default void ifErr(@NonNull Consumer<E> fn) {
+    if (isErr()) {
+      fn.accept(err());
     }
+  }
+  
+  /**
+   * Extracts the OK value, or throws a {@link Failure} wrapping the error.
+   * <pre>{@code
+   * Result<String, IOException> ok = new Ok<>("data");
+   * String data = ok.unwrap(); // "data"
+   *
+   * Result<String, IOException> err = new Err<>(new IOException());
+   * String data = err.unwrap(); // throws Failure(IOException)
+   * }</pre>
+   * @return the OK value
+   * @throws Failure wrapping the ERR error
+   */
+  default V unwrap() {
+    return switch (this) {
+      case Ok(var item) -> item;
+      case Err(var item) -> throw new Failure(item);
+    };
+  }
 
-    /**
-     * Produces a new {@link Result} out of {@code this}
-     *  and another {@link Result} by combining their
-     *  items into a {@link Fuse}.
-     * <p>The eventual {@link Result} will have {@code OK}
-     *  state iff. both instances are {@code OK}; {@code ERR}
-     *  state is assumed otherwise, with the error taken from
-     *  the only {@code ERR} from the pair or from {@code this}
-     *  instance if both are {@code ERR}.
-     * <p>In order to be fuse-able, fused items must contain
-     *  the same error type.
-     * @param another fuse with
-     * @param <N> fused item type
-     * @return a new {@link Result} containing {@link Fuse}
-     * @throws IllegalArgumentException if no argument provided
-     */
-    public <N> Result<Fuse<V, N>, E> fuse(@NonNull Result<N, E> another) {
-        return fuse(another, TakeFrom.HEAD);
-    }
+  /**
+   * Extracts the OK value, or returns a default value if ERR.
+   * <pre>{@code
+   * Result<Integer, IOException> ok = new Ok<>(42);
+   * int value = ok.unwrapOr(0); // 42
+   *
+   * Result<Integer, IOException> err = new Err<>(new IOException());
+   * int value = err.unwrapOr(0); // 0
+   * }</pre>
+   * @param repl default value if ERR
+   * @return OK value or replacement
+   * @throws IllegalArgumentException if replacement is null
+   */
+  default V unwrapOr(@NonNull V repl) {
+    return switch (this) {
+      case Ok(var item) -> item;
+      case Err(var ignored) -> repl;
+    };
+  }
 
-    /**
-     * Produces a new {@link Result} out of {@code this}
-     *  and another {@link Result} by combining their
-     *  items into a {@link Fuse}.
-     * <p>The eventual {@link Result} will have {@code OK}
-     *  state iff. both instances are {@code OK}; {@code ERR}
-     *  state is assumed otherwise with the error taken from
-     *  the only {@code ERR} from the pair. If both instances
-     *  are {@code ERR}, the {@link TakeFrom rule arg} allows
-     *  to point which of the {@code ERR} items passes the
-     *  error on.
-     * <p>In order to be fuse-able, fused items must contain
-     *  the same error type.
-     * @param another fuse with
-     * @param rule fusing rule
-     * @param <N> fused item type
-     * @return a new {@link Result} containing {@link Fuse}
-     * @throws IllegalArgumentException if either of the arguments not provided
-     */
-    public <N> Result<Fuse<V, N>, E> fuse(@NonNull Result<N, E> another,
-                                          @NonNull TakeFrom rule) {
-        return rule.takeError(this, another)
-                .<Result<Fuse<V, N>, E>>map(Result::err)
-                .orElseGet(() -> Result.ok(new Fuse<>(this.item, another.item)));
-    }
+  /**
+   * Extracts the OK value, or supplies a default value if ERR.
+   * <pre>{@code
+   * Result<List<String>, IOException> ok = new Ok<>(Arrays.asList("a", "b"));
+   * List<String> list = ok.unwrapOr(Collections::emptyList); // [a, b]
+   *
+   * Result<List<String>, IOException> err = new Err<>(new IOException());
+   * List<String> list = err.unwrapOr(Collections::emptyList); // []
+   * }</pre>
+   * @param fn supplier for default value if ERR
+   * @return OK value or supplied default
+   * @throws IllegalArgumentException if supplier is null
+   */
+  default V unwrapOr(@NonNull Supplier<V> fn) {
+    return switch (this) {
+      case Ok(var item) -> item;
+      case Err(var ignored) -> Remap.returnSupplied(fn.get());
+    };
+  }
 
-    /**
-     * Produces a new {@link Result} out of {@code this}
-     *  and {@link BaseResult any other result}.
-     * <p>The eventual {@link Result} will have {@code OK}
-     *  state iff. both instances are {@code OK}; {@code ERR}
-     *  state is assumed otherwise, with the error taken from
-     *  the only {@code ERR} from the pair or from {@code this}
-     *  instance if both are {@code ERR}.
-     * <p>As source {@link BaseResult result} may or may not
-     *  contain an item (contrary to {@link Result#fuse(Result)
-     *  the other implementation}), the {@code OK} result is
-     *  always resolved using item belonging to {@code this} instance.
-     * <p>In order to be fuse-able, fused items must contain
-     *  the same error type.
-     * @param another fuse with
-     * @return a new {@link FlagResult}
-     * @throws IllegalArgumentException if no argument provided
-     */
-    public Result<V, E> fuse(@NonNull BaseResult<E> another) {
-        return TakeFrom.HEAD.takeError(this, another)
-                .<Result<V, E>>map(Result::err)
-                .orElseGet(() -> Result.ok(this.item));
-    }
-
-    /**
-     * Produces a new {@link Result} out of {@code this}
-     *  and {@link BaseResult any other result}.
-     * <p>The eventual {@link Result} will have {@code OK}
-     *  state iff. both instances are {@code OK}; {@code ERR}
-     *  state is assumed otherwise, with the error taken from
-     *  the only {@code ERR} from the pair. If both instances
-     *  are {@code ERR}, the {@link TakeFrom rule arg} allows
-     *  to point which of the {@code ERR} items passes the
-     *  error on.
-     * <p>As source {@link BaseResult result} may or may not
-     *  contain an item (contrary to {@link Result#fuse(Result)
-     *  the other implementation}), the {@code OK} result is
-     *  always resolved using item belonging to {@code this} instance.
-     * <p>In order to be fuse-able, fused items must contain
-     *  the same error type.
-     * @param another fuse with
-     * @param rule fusing rule
-     * @return a new {@link FlagResult}
-     * @throws IllegalArgumentException if either of the arguments not provided
-     */
-    public Result<V, E> fuse(@NonNull BaseResult<E> another,
-                             @NonNull TakeFrom rule) {
-        return rule.takeError(this, another)
-                .<Result<V, E>>map(Result::err)
-                .orElseGet(() -> Result.ok(this.item));
-    }
-
-    /**
-     * Inspects the {@code OK} state using the specified function,
-     *  if {@code this} instance is {@code OK}.
-     * @param consumer inspection function
-     * @return {@code this} instance
-     * @throws IllegalArgumentException if no argument provided
-     */
-    public Result<V, E> peek(@NonNull Consumer<V> consumer) {
-        if (isOk()) {
-            consumer.accept(item);
-        }
-
-        return this;
-    }
-
-    /**
-     * Inspects the {@code OK} state using the specified function,
-     *  if {@code this} instance is {@code OK} and is of the specified type.
-     * @param predicate predicate
-     * @param consumer inspection function
-     * @return {@code this} instance
-     * @throws IllegalArgumentException if either of the arguments provided
-     */
-    public Result<V, E> peek(@NonNull Predicate<V> predicate,
-                             @NonNull Consumer<V> consumer) {
-        if (isOkAnd(predicate)) {
-            consumer.accept(item);
-        }
-
-        return this;
-    }
-
-    /**
-     * Inspects the {@code ERR} state using the specified function,
-     *  if {@code this} instance is {@code ERR}.
-     * @param consumer inspection function
-     * @return {@code this} instance
-     * @throws IllegalArgumentException if no argument provided
-     */
-    public Result<V, E> peekErr(@NonNull Consumer<E> consumer) {
-        if (isErr()) {
-            consumer.accept(error);
-        }
-
-        return this;
-    }
-
-    /**
-     * Inspects the {@code ERR} state using the specified function,
-     *  if {@code this} instance is {@code ERR} and is of the specified type.
-     * @param type expected type
-     * @param consumer inspection function
-     * @return {@code this} instance
-     * @throws IllegalArgumentException if either of the arguments provided
-     */
-    public Result<V, E> peekErr(@NonNull Class<? extends Exception> type,
-                                @NonNull Consumer<E> consumer) {
-        if (isErrAnd(type)) {
-            consumer.accept(error);
-        }
-
-        return this;
-    }
-
-    /**
-     * Inspects the {@code ERR} state using the specified function,
-     *  if {@code this} instance is {@code ERR} and the provided
-     *  predicate holds.
-     * @param predicate predicate
-     * @param consumer inspection function
-     * @return {@code this} instance
-     * @throws IllegalArgumentException if either of the arguments provided
-     */
-    public Result<V, E> peekErr(@NonNull Predicate<E> predicate,
-                                @NonNull Consumer<E> consumer) {
-        if (isErrAnd(predicate)) {
-            consumer.accept(error);
-        }
-
-        return this;
-    }
-
-    /**
-     * Converts {@code this} instance into a {@link FlagResult}
-     *  by dropping the {@code OK} item. Internal error state
-     *  is carried over as-is.
-     * @return new {@link FlagResult}
-     */
-    public FlagResult<E> drop() {
-        if (isErr()) {
-            return FlagResult.err(error);
-        } else {
-            return FlagResult.ok();
-        }
-    }
-
-    /**
-     * A shorthand for {@link Result#map(Function)}.
-     * @param item replacement
-     * @return new {@code OK} {@link Result} with new item
-     * @param <N> new item type
-     */
-    public <N> Result<N, E> swap(@NonNull N item) {
-        return map(dropped -> item);
-    }
-
-    /**
-     * Applies a callback function to convert the item
-     *  if {@code this} instance is {@code OK};
-     *  returns a new {@code ERR} otherwise.
-     * <p>Very similar to {@link Optional#map(Function)}.
-     * @param remap callback
-     * @return mapped {@link Result}
-     * @param <N> new item type
-     * @throws IllegalArgumentException if no argument provided or
-     *  if the callback function returns {@code null}
-     */
-    public <N> Result<N, E> map(@NonNull Function<V, N> remap) {
-        if (isErr()) {
-            return err(error);
-        } else {
-            return ok(remap.apply(item));
-        }
-    }
-
-    /**
-     * Applies a {@link Result}-returning callback function
-     *  to convert the item if {@code this} instance is {@code OK};
-     *  returns a new {@code ERR} otherwise.
-     * <p>Very similar to {@link Optional#flatMap(Function)}.
-     * @param remap callback
-     * @return mapped {@link Result}
-     * @param <N> new item type
-     * @throws IllegalArgumentException if no argument provided or
-     *  if the callback function returns {@code null}
-     */
-    public <N> Result<N, E> flatMap(@NonNull Function<V, Result<N, E>> remap) {
-        if (isErr()) {
-            return err(error);
-        } else {
-            return returnRemapped(remap.apply(item));
-        }
-    }
-
-    /**
-     * Same as {@link Result#flatMap(Function)} with the only
-     *  difference is that the remapping function accepts any
-     *  {@link BaseResult} and returns a {@link FlagResult result}
-     *  without value.
-     * @param remap function
-     * @return mapped {@link FlagResult}
-     * @throws IllegalArgumentException if no argument provided or
-     *  if the callback function returns {@code null}
-     */
-    public FlagResult<E> flatMapAndDrop(@NonNull Function<V, BaseResult<E>> remap) {
-        if (isErr()) {
-            return FlagResult.err(error);
-        } else {
-            return FlagResult.from(remap.apply(item));
-        }
-    }
-
-    /**
-     * Erases the {@code ERR} type information of
-     *  {@code this} result.
-     * @return result with broadened
-     */
-    @Override
-    public Result<V, Exception> upcast() {
-        return isOk() ? Result.ok(item) : Result.err(error);
-    }
-
-    /**
-     * {@inheritDoc}
-     * @param remap callback
-     * @return mapped {@link Result}
-     * @param <N> new error type
-     * @throws IllegalArgumentException if no argument provided or
-     *  if the callback function returns {@code null}
-     */
-    @Override
-    public <N extends Exception> Result<V, N> mapErr(@NonNull Function<E, N> remap) {
-        if (isErr()) {
-            return err(remap.apply(error));
-        } else {
-            return ok(item);
-        }
-    }
-
-    /**
-     * Converts an {@code OK} result into {@code ERR}
-     *  using the specified factory if {@code this}
-     *  instance is {@code OK}. Recreates {@code this}
-     *  with its internal error state otherwise.
-     * <p>Note: the resulting type parameter is up-cast
-     *  to the most generic type supported: {@link Exception}.
-     * @param factory exception factory
-     * @return converted instance
-     * @throws IllegalArgumentException if no argument provided or if
-     *  the factory function returns {@code null}
-     */
-    @Override
-    public Result<V, Exception> taint(@NonNull Supplier<? extends Exception> factory) {
-        if (isOk()) {
-            return err(factory.get());
-        } else {
-            return err(error);
-        }
-    }
-
-    /**
-     * Converts an {@code OK} result into {@code ERR}
-     *  using the specified factory if {@code this}
-     *  instance is {@code OK}. Recreates {@code this}
-     *  with its internal error state otherwise.
-     * @param factory exception factory
-     * @return converted result
-     */
-    @Override
-    public Result<V, E> fork(@NonNull Supplier<E> factory) {
-        if (isOk()) {
-            return err(factory.get());
-        } else {
-            return err(error);
-        }
-    }
-
-    /**
-     * Converts an {@code OK} result into {@code ERR}
-     *  using the specified factory if {@code this}
-     *  instance is {@code OK} and if the provided
-     *  {@link Predicate} invoked on the item holds.
-     * <p>If the predicate does not hold, returns the
-     *  recreated {@code OK} item.
-     * <p>If {@code this} is {@code ERR}, recreates itself
-     *  with the internal error state.
-     * <p>Note: the resulting type parameter is up-cast
-     *  to the most generic type supported: {@link Exception}.
-     * @param condition conversion predicate
-     * @param factory exception factory
-     * @return converted instance
-     * @throws IllegalArgumentException if either of the arguments not
-     *  provided or if the factory function returns {@code null}
-     */
-    public Result<V, Exception> taint(@NonNull Predicate<V> condition,
-                                      @NonNull Function<V, ? extends Exception> factory) {
-        if (isOk()) {
-            if (condition.test(item)) {
-                return err(factory.apply(item));
-            } else {
-                return ok(item);
-            }
-        } else {
-            return err(error);
-        }
-    }
-
-    /**
-     * Converts an {@code OK} result into {@code ERR}
-     *  using the specified factory if {@code this}
-     *  instance is {@code OK} and if the provided
-     *  {@link Predicate} invoked on the item holds.
-     * <p>If the predicate does not hold, returns the
-     *  recreated {@code OK} item.
-     * <p>If {@code this} is {@code ERR}, recreates itself
-     *  with the internal error state.
-     * @param condition conversion predicate
-     * @param factory exception factory
-     * @return converted instance
-     * @throws IllegalArgumentException if either of the arguments not
-     *  provided or if the factory function returns {@code null}
-     */
-    public Result<V, E> fork(@NonNull Predicate<V> condition,
-                             @NonNull Function<V, E> factory) {
-        if (isOk()) {
-            if (condition.test(item)) {
-                return err(factory.apply(item));
-            } else {
-                return ok(item);
-            }
-        } else {
-            return err(error);
-        }
-    }
-
-    /**
-     * Converts an {@code ERR} result into {@code OK}
-     *  using the specified factory faction. If {@code this}
-     *  result is already an {@code OK} result, the internal
-     *  {@code OK} object is returned.
-     * <p>Equivalent to {@link Result#unwrapOr(Supplier)},
-     *  except that this method returns a result.
-     * @param factory {@code OK} object factory
-     * @return new {@code OK} result with recovery object
-     * @throws IllegalArgumentException if either of the arguments not
-     *  provided or if the factory function returns {@code null}
-     */
-    public Result<V, E> recover(@NonNull Function<E, V> factory) {
-        if (isOk()) {
-            return Result.ok(item);
-        } else {
-            return Result.ok(factory.apply(error));
-        }
-    }
-
-    /**
-     * Conditionally converts an {@code ERR} result into {@code OK}
-     *  using the specified factory faction if the supplied predicate
-     *  holds. If {@code this} result is already an {@code OK} result,
-     *  the internal {@code OK} object is returned.
-     * <p>If the predicate does not hold, returns the recreated {@code OK} item.
-     * @param condition checked predicate
-     * @param factory {@code OK} object factory
-     * @return new {@code OK} result with recovery object
-     * @throws IllegalArgumentException if either of the arguments not
-     *  provided or if the factory function returns {@code null}
-     */
-    public Result<V, E> recover(@NonNull Predicate<E> condition,
-                                @NonNull Function<E, V> factory) {
-        if (isOk()) {
-            return Result.ok(item);
-        } else {
-            return condition.test(error)
-                    ? Result.ok(factory.apply(error))
-                    : Result.err(error);
-        }
-    }
-
-    /**
-     * Conditionally converts an {@code ERR} result into {@code OK}
-     *  using the specified factory faction if the {@code ERR} is
-     *  {@code instanceof} the specified type. If {@code this} result
-     *  is already an {@code OK} result, the internal {@code OK} object
-     *  is returned.
-     * <p>If the predicate does not hold, returns the recreated {@code OK} item.
-     * @param ifType checked type
-     * @param factory {@code OK} object factory
-     * @return new {@code OK} result with recovery object
-     * @throws IllegalArgumentException if either of the arguments not
-     *  provided or if the factory function returns {@code null}
-     */
-    public Result<V, E> recover(@NonNull Class<? extends E> ifType,
-                                @NonNull Function<E, V> factory) {
-        if (isOk()) {
-            return Result.ok(item);
-        } else {
-            if (ifType.isAssignableFrom(error.getClass())) {
-                return Result.ok(factory.apply(error));
-            } else {
-                return Result.err(error);
-            }
-        }
-    }
-
-    /**
-     * Performs the specified callback if {@code this}
-     *  instance is {@code OK} or does nothing otherwise.
-     * @param action callback
-     * @throws IllegalArgumentException if the argument is null
-     */
-    public void ifOk(@NonNull Consumer<V> action) {
-        if (isOk()) {
-            action.accept(item);
-        }
-    }
-
-    /**
-     * A safe take on {@link Result#get()}: if {@code this}
-     *  is {@code ERR}, returns a provided fallback value.
-     * <p>Similar to {@link Optional#orElse(Object)}.
-     * @param another fallback
-     * @return item or fallback
-     * @throws IllegalArgumentException if no argument provided
-     */
-    public V unwrapOr(@NonNull V another) {
-        if (isOk()) {
-            return item;
-        } else {
-            return another;
-        }
-    }
-
-    /**
-     * A safe take on {@link Result#get()}: if {@code this}
-     *  is {@code ERR}, returns a provided fallback value.
-     * <p>Similar to {@link Optional#orElseGet(Supplier)}.
-     * @param factory fallback factory
-     * @return item or fallback
-     * @throws IllegalArgumentException if no argument provided
-     *  or if the provided factory returns {@code null}
-     */
-    public V unwrapOr(@NonNull Supplier<V> factory) {
-        if (isOk()) {
-            return item;
-        } else {
-            return returnSupplied(factory.get());
-        }
-    }
-
-    /**
-     * Returns {@code OK} item if {@code this} instance
-     *  is an {@code OK} result. Wraps the internal {@code ERR}
-     *  state into a {@link Failure wrapping exception} and
-     *  throws otherwise.
-     * @return item
-     * @throws Failure result wrapping exception
-     */
-    public V unwrap() {
-        if (isOk()) {
-            return item;
-        } else {
-            throw new Failure(error);
-        }
-    }
-
-    /**
-     * Returns {@code OK} item if {@code this} instance
-     *  is an {@code OK} result. Throws the internal {@code ERR}
-     *  state otherwise.
-     * @return item
-     * @throws E result exception
-     */
-    public V unwrapChecked() throws E {
-        if (isOk()) {
-            return item;
-        } else {
-            throw error;
-        }
-    }
-
-    @Override
-    public String toString() {
-        return "Result[" + (isOk() ? "ok=" + item : "err=" + error) + ']';
-    }
-
-    /**
-     * Checks if {@code this} equals {@code that}.
-     * @param that that
-     * @return comparison result
-     */
-    @Override
-    public boolean equals(Object that) {
-        if (this == that) return true;
-        if (that == null || getClass() != that.getClass()) return false;
-
-        Result<?, ?> result = (Result<?, ?>) that;
-
-        if (!Objects.equals(item, result.item)) return false;
-        return Objects.equals(error, result.error);
-    }
-
-    /**
-     * Computes hashcode.
-     * @return computed hashcode
-     */
-    @Override
-    public int hashCode() {
-        if (isOk()) {
-            return 31 * item.hashCode();
-        } else {
-            return 31 * error.hashCode();
-        }
-    }
-
-    /**
-     * A pair-like record.
-     * @param left left value
-     * @param right right value
-     * @param <L> left value type
-     * @param <R> right value type
-     */
-    public record Fuse<L, R>(@NonNull L left,
-                             @NonNull R right) { }
-
-    /**
-     * Internal constructor.
-     * <p>Setting the arguments to {@code null} must
-     *  follow the class contract.
-     * @param item nullable ok value
-     * @param error nullable error value
-     */
-    protected Result(V item, E error) {
-        super(error);
-        this.item = item;
-    }
-
-    private <N> Result<N, E> returnRemapped(@NonNull Result<N, E> val) {
-        return val;
-    }
-
-    private V returnSupplied(@NonNull V val) {
-        return val;
-    }
-
+  /**
+   * Extracts the OK value, or throws the checked error if ERR.
+   * <pre>{@code
+   * Result<String, IOException> ok = new Ok<>("data");
+   * String data = ok.unwrapChecked(); // "data"
+   *
+   * Result<String, IOException> err = new Err<>(new IOException());
+   * String data = err.unwrapChecked(); // throws IOException
+   * }</pre>
+   * @return the OK value
+   * @throws E the ERR error
+   */
+  default V unwrapChecked() throws E {
+    return switch (this) {
+      case Ok(var item) -> item;
+      case Err(var item) -> throw item;
+    };
+  }
+  
 }
