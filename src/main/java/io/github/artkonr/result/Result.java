@@ -548,7 +548,7 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @param <N> second value type
    * @throws IllegalArgumentException if any argument is null
    */
-  default <N> Result<Fuse<V, N>, E> fuse(@NonNull Result<N, E> another, TakeFrom errFrom) {
+  default <N> Result<Fuse<V, N>, E> fuse(@NonNull Result<N, E> another, @NonNull TakeFrom errFrom) {
     return errFrom
       .takeError(this, another)
       .<Result<Fuse<V, N>, E>>map(it -> new Err<>(it))
