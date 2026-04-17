@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -53,7 +54,7 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @param <V> return type
    * @throws IllegalArgumentException if operation is null or returns null
    */
-  public static <V> Result<V, Exception> wrap(@NonNull Wrap.Supplier<V> fn) {
+  static <V> Result<V, Exception> wrap(@NonNull Wrap.Supplier<V> fn) {
     V val;
     try {
         val = fn.get();
@@ -81,7 +82,7 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if any argument is null or operation returns null
    * @throws IllegalStateException if caught exception doesn't match expected type
    */
-  public static <V, E extends Exception> Result<V, E> wrap(
+  static <V, E extends Exception> Result<V, E> wrap(
     @NonNull Class<E> errType,
     @NonNull Wrap.Supplier<@NonNull V> fn
   ) {
@@ -119,7 +120,7 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @param <E> error type
    * @throws IllegalArgumentException if source is null
    */
-  public static <V, E extends Exception> Result<V, E> from(@NonNull Result<V, E> source) {
+  static <V, E extends Exception> Result<V, E> from(@NonNull Result<V, E> source) {
     return switch (source) {
       case Ok(var item) -> new Ok<>(item);
       case Err(var item) -> new Err<>(item);
@@ -149,9 +150,9 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @param <E> error type
    * @throws IllegalArgumentException if invocations is null
    */
-  public static <V, E extends Exception> Result<List<V>, E> chain(@NonNull Collection<Supplier<Result<V, E>>> invocations) {
+  static <V, E extends Exception> Result<List<V>, E> chain(@NonNull Collection<Supplier<Result<V, E>>> invocations) {
     List<Supplier<Result<V, E>>> filtered = invocations.stream()
-      .filter(it -> it != null)
+      .filter(Objects::nonNull)
       .toList();
     List<V> ok = new ArrayList<>();
     if (!filtered.isEmpty()) {
@@ -209,13 +210,13 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @param <E> error type
    * @throws IllegalArgumentException if any argument is null
    */
-  public static <V, E extends Exception> Result<List<V>, E> join(@NonNull Collection<Result<V, E>> results,
+  static <V, E extends Exception> Result<List<V>, E> join(@NonNull Collection<Result<V, E>> results,
                                                                  @NonNull TakeFrom rule) {
     List<Result<V, E>> nonNull = results.stream()
-      .filter(it -> it != null)
+      .filter(Objects::nonNull)
       .toList();
     List<Result<V, E>> errored = nonNull.stream()
-      .filter(it -> it.isErr())
+      .filter(Result::isErr)
       .toList();
     if (!errored.isEmpty()) {
         Result<V, E> result = switch (rule) {
@@ -225,7 +226,7 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
         return new Err<>(result.err());
     } else {
         return new Ok<>(nonNull.stream()
-          .map(result -> result.value())
+          .map(Result::value)
           .toList()
         );
       }
@@ -252,7 +253,7 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @param <E> error type
    * @throws IllegalArgumentException if result is null
    */
-  public static <V, E extends Exception> Optional<Result<V, E>> elevate(@NonNull Result<Optional<V>, E> result) {
+  static <V, E extends Exception> Optional<Result<V, E>> elevate(@NonNull Result<Optional<V>, E> result) {
     return switch (result) {
       case Ok(var item) -> item.map(it -> new Ok<>(it));
       case Err(var item) -> Optional.of(new Err<>(item));
@@ -289,10 +290,7 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if predicate is null
    */
   default boolean isOkAnd(@NonNull Predicate<V> cond) {
-    return switch (this) {
-      case Ok(var item) -> cond.test(item);
-      case Err(var ignored) -> false;
-    };
+    return this instanceof Ok(var item) && cond.test(item);
   }
   
   /**
@@ -326,11 +324,7 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if type is null
    */
   default boolean isErrAnd(@NonNull Class<? extends Exception> type) {
-    if (this instanceof Err err) {
-      return type.isAssignableFrom(err.item().getClass());
-    } else {
-      return false;
-    }
+    return this instanceof Err(var item) && type.isAssignableFrom(item.getClass());
   }
   
   /**
@@ -345,10 +339,7 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if predicate is null
    */
   default boolean isErrAnd(@NonNull Predicate<E> cond) {
-    return switch (this) {
-      case Err(var item) when cond.test(item) -> true;
-      default -> false;
-    };
+    return this instanceof Err(var item) && cond.test(item);
   }
   
   /**
@@ -425,7 +416,7 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
   default <N extends Exception> Result<V, N> stack(@NonNull N repl) {
     return switch (this) {
       case Ok(var item) -> new Ok<>(item);
-      case Err(var item) -> new Err<>(repl);
+      case Err(var ignored) -> new Err<>(repl);
     };
   }
 
@@ -463,7 +454,7 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
   default <N extends Exception> Result<V, N> stack(@NonNull Supplier<N> fn) {
     return switch (this) {
       case Ok(var item) -> new Ok<>(item);
-      case Err(var item) -> new Err<>(fn.get());
+      case Err(var ignored) -> new Err<>(fn.get());
     };
   }
   
@@ -551,7 +542,7 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
   default <N> Result<Fuse<V, N>, E> fuse(@NonNull Result<N, E> another, @NonNull TakeFrom errFrom) {
     return errFrom
       .takeError(this, another)
-      .<Result<Fuse<V, N>, E>>map(it -> new Err<>(it))
+      .<Result<Fuse<V, N>, E>>map(Err::new)
       .orElseGet(() -> new Ok<>(new Fuse<>(this.value(), another.value())));
   }
   
@@ -567,13 +558,11 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if function is null
    */
   default Result<V, E> peek(@NonNull Consumer<V> fn) {
-    return switch (this) {
-      case Ok(var item) -> {
-        fn.accept(item);
-        yield this;
-      }
-      case Err(var ignored) -> this;
-    };
+    if (this instanceof Ok(var item)) {
+      fn.accept(item);
+    }
+
+    return this;
   }
 
   /**
@@ -589,13 +578,11 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if any argument is null
    */
   default Result<V, E> peek(@NonNull Predicate<V> cond, @NonNull Consumer<V> fn) {
-    return switch (this) {
-      case Ok(var item) when cond.test(item) -> {
-        fn.accept(item);
-        yield this;
-      }
-      default -> this;
-    };
+    if (this instanceof Ok(var item) && cond.test(item)) {
+      fn.accept(item);
+    }
+
+    return this;
   }
   
   /**
@@ -609,13 +596,10 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if function is null
    */
   default Result<V, E> inspect(@NonNull Consumer<E> fn) {
-    return switch (this) {
-      case Ok(var ignored) -> this;
-      case Err(var item) -> {
-        fn.accept(item);
-        yield this;
-      }
-    };
+    if (this instanceof Err(var item)) {
+      fn.accept(item);
+    }
+    return this;
   }
 
   /**
@@ -630,13 +614,11 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if any argument is null
    */
   default Result<V, E> inspect(@NonNull Predicate<E> cond, @NonNull Consumer<E> fn) {
-    return switch (this) {
-      case Err(var item) when cond.test(item) -> {
-        fn.accept(item);
-        yield this;
-      }
-      default -> this;
-    };
+    if (this instanceof Err(var item) && cond.test(item)) {
+      fn.accept(item);
+    }
+
+    return this;
   }
 
   /**
@@ -651,13 +633,11 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if any argument is null
    */
   default Result<V, E> inspect(@NonNull Class<? extends Exception> type, @NonNull Consumer<E> fn) {
-    return switch (this) {
-      case Err(var item) when type.isAssignableFrom(item.getClass()) -> {
-        fn.accept(item);
-        yield this;
-      }
-      default -> this;
-    };
+    if (this instanceof Err(var item) && type.isAssignableFrom(item.getClass())) {
+      fn.accept(item);
+    }
+
+    return this;
   }
   
   /**
@@ -745,10 +725,11 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if function is null
    */
   default Result<V, E> recover(@NonNull Function<E, V> fn) {
-    return switch (this) {
-      case Ok(var item) -> this;
-      case Err(var item) -> recover(fn.apply(item));
-    };
+    if (this instanceof Err(var item)) {
+      return recover(fn.apply(item));
+    }
+
+    return this;
   }
 
   /**
@@ -809,10 +790,11 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if any argument is null
    */
   default Result<V, E> recover(@NonNull Predicate<E> cond, @NonNull Function<E, V> fn) {
-    return switch (this) {
-      case Err(var item) when cond.test(item) -> recover(fn);
-      default -> this;
-    };
+    if (this instanceof Err(var item) && cond.test(item)) {
+      return recover(fn);
+    }
+
+    return this;
   }
 
   /**
@@ -874,10 +856,11 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if any argument is null
    */
   default Result<V, E> recover(@NonNull Class<? extends Exception> type, @NonNull Function<E, V> fn) {
-    return switch (this) {
-      case Err(var item) when type.isAssignableFrom(item.getClass()) -> recover(fn);
-      default -> this;
-    };
+    if (this instanceof Err(var item) && type.isAssignableFrom(item.getClass())) {
+      return recover(fn);
+    }
+
+    return this;
   }
   
   /**
@@ -890,10 +873,11 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalStateException if this is an ERR result
    */
   default V value() {
-    return switch (this) {
-      case Ok(var item) -> item;
-      default -> throw new IllegalStateException("not an OK result");
-    };
+    if (this instanceof Ok(var item)) {
+      return item;
+    }
+
+    throw new IllegalStateException("not an OK result");
   }
 
   /**
@@ -906,10 +890,11 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalStateException if this is an OK result
    */
   default E err() {
-    return switch (this) {
-      case Err(var item) -> item;
-      default -> throw new IllegalStateException("not an ERR result");
-    };
+    if (this instanceof Err(var item)) {
+      return item;
+    }
+
+    throw new IllegalStateException("not an ERR result");
   }
 
   /**
