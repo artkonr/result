@@ -37,6 +37,12 @@ public enum TakeFrom {
      *   new Err<>(new IOException())
      * );
      * // Returns Optional.of(IOException)
+     *
+     * Optional<IOException> error = TakeFrom.TAIL.takeError(
+     *   new Err<>(new IOException("first")),
+     *   new Err<>(new IOException("second"))
+     * );
+     * // Returns Optional.of(IOException("second"))
      * }</pre>
      * @param head first result
      * @param tail second result
@@ -61,6 +67,41 @@ public enum TakeFrom {
 
         if (tail.isErr()) {
             return Optional.of(tail.err());
+        }
+
+        return Optional.empty();
+    }
+
+    /**
+     * Selects which error to return from two Done instances based on this rule.
+     * <pre>{@code
+     * Optional<IOException> error = TakeFrom.HEAD.takeError(
+     *   new Failure<>(new IOException("first")),
+     *   new Failure<>(new IOException("second"))
+     * );
+     * // Returns Optional.of(IOException("first"))
+     * }</pre>
+     * @param head first done
+     * @param tail second done
+     * @return selected error, or empty if both are Success
+     * @param <E> error type
+     */
+    <E extends Exception> Optional<E> takeError(Done<E> head, Done<E> tail) {
+
+        if (head.isFailure() && tail.isFailure()) {
+            E picked = switch (this) {
+                case HEAD -> head.failure();
+                case TAIL -> tail.failure();
+            };
+            return Optional.of(picked);
+        }
+
+        if (head.isFailure()) {
+            return Optional.of(head.failure());
+        }
+
+        if (tail.isFailure()) {
+            return Optional.of(tail.failure());
         }
 
         return Optional.empty();

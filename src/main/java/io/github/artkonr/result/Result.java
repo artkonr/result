@@ -6,6 +6,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -182,7 +186,81 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
         return new Ok<>(ok);
     }
   }
-  
+
+  /**
+   * Chains multiple Result-producing operations asynchronously on the specified executor.
+   * <p>Each operation is executed in parallel on the given executor. Returns OK with list of all values
+   * if all succeed, otherwise ERR from the first failed operation.
+   * <pre>{@code
+   * Executor executor = Executors.newVirtualThreadPerTaskExecutor();
+   * CompletableFuture<Result<List<Integer>, IOException>> future = Result.chainAsync(
+   *   Arrays.asList(
+   *     () -> new Ok<>(1),
+   *     () -> new Ok<>(2),
+   *     () -> new Ok<>(3)
+   *   ),
+   *   executor
+   * );
+   * Result<List<Integer>, IOException> result = future.join();
+   * // Result is Ok([1, 2, 3])
+   * }</pre>
+   * @param invocations operations to invoke in parallel
+   * @param runner executor to run operations on
+   * @return OK with list of all values, or ERR from first failed operation, wrapped in a future
+   * @param <V> value type
+   * @param <E> error type
+   * @throws IllegalArgumentException if invocations or runner is null
+   */
+  static <V, E extends Exception> CompletableFuture<Result<List<V>, E>> chainAsync(@NonNull Collection<Supplier<Result<V, E>>> invocations,
+                                                                                   @NonNull Executor runner) {
+    List<CompletableFuture<Result<V, E>>> results = invocations.stream()
+      .filter(Objects::nonNull)
+      .map(task -> CompletableFuture.supplyAsync(task, runner))
+      .toList();
+
+    CompletableFuture<Result<List<V>, E>> end = CompletableFuture.completedFuture(new Ok<>(new CopyOnWriteArrayList<>()));
+    for (var promise : results) {
+      end = end.thenCombine(promise, (acc, curr) -> switch (acc) {
+        case Ok(var list) -> switch (curr) {
+          case Ok(var item) -> { list.add(item); yield acc; }
+          case Err(var err) -> new Err<>(err);
+        };
+        case Err(var ignored) -> acc;
+      });
+    }
+
+    return end;
+  }
+
+  /**
+   * Chains multiple Result-producing operations asynchronously using virtual threads.
+   * <p>This is a convenience method that automatically creates a virtual thread executor,
+   * making it ideal for simple async chains without executor management. Operations are
+   * executed in parallel. Returns OK with list of all values if all succeed, otherwise ERR
+   * from the first failed operation.
+   * <pre>{@code
+   * CompletableFuture<Result<List<Integer>, IOException>> future = Result.chainAsync(
+   *   Arrays.asList(
+   *     () -> new Ok<>(1),
+   *     () -> new Ok<>(2),
+   *     () -> new Ok<>(3)
+   *   )
+   * );
+   * Result<List<Integer>, IOException> result = future.join();
+   * // Result is Ok([1, 2, 3])
+   * }</pre>
+   * @param invocations operations to invoke in parallel
+   * @return OK with list of all values, or ERR from first failed operation, wrapped in a future
+   * @param <V> value type
+   * @param <E> error type
+   * @throws IllegalArgumentException if invocations is null
+   */
+  static <V, E extends Exception> CompletableFuture<Result<List<V>, E>> chainAsync(@NonNull Collection<Supplier<Result<V, E>>> invocations) {
+    try (var runner = Executors.newVirtualThreadPerTaskExecutor()) {
+      return chainAsync(invocations, runner);
+    }
+  }
+
   /**
    * Combines multiple Results into a single Result containing a list.
    * <p>Returns OK with all values if all Results are OK, otherwise ERR using the specified rule.
@@ -211,7 +289,7 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if any argument is null
    */
   static <V, E extends Exception> Result<List<V>, E> join(@NonNull Collection<Result<V, E>> results,
-                                                                 @NonNull TakeFrom rule) {
+                                                          @NonNull TakeFrom rule) {
     List<Result<V, E>> nonNull = results.stream()
       .filter(Objects::nonNull)
       .toList();
@@ -396,7 +474,23 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
   default <N> Result<N, E> swap(@NonNull Supplier<N> fn) {
     return swap(Remap.returnSupplied(fn.get()));
   }
-  
+
+  /**
+   * Converts this Result to a Done, discarding the value.
+   * <p>Useful when you only care about success/failure, not the value.
+   * <pre>{@code
+   * Result<String, IOException> result = new Ok<>("data");
+   * Done<IOException> done = result.drop(); // Success
+   *
+   * Result<String, IOException> err = new Err<>(new IOException());
+   * Done<IOException> done = err.drop(); // Failure(IOException)
+   * }</pre>
+   * @return Success if this is OK, Failure if this is ERR
+   */
+  default Done<E> drop() {
+    return Done.from(this);
+  }
+
   /**
    * Replaces the ERR error, or passes through the OK unchanged.
    * <pre>{@code
@@ -477,12 +571,12 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * Chains Result-returning operations, flattening nested Results.
    * <pre>{@code
    * Result<Integer, IOException> ok = new Ok<>(5);
-   * Result<String, IOException> chained = ok.flatMap(n ->
+   * Result<String, IOException> chained = ok.then(n ->
    *   new Ok<>("number: " + n)
    * );
    * // Result is Ok("number: 5")
    *
-   * Result<String, IOException> flatMapped = chained.flatMap(s ->
+   * Result<String, IOException> flatMapped = chained.then(s ->
    *   new Err<>(new IOException("failed"))
    * );
    * // Result is Err(IOException)
@@ -492,7 +586,7 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @param <N> new value type
    * @throws IllegalArgumentException if function is null
    */
-  default <N> Result<N, E> flatMap(@NonNull Function<V, Result<N, E>> fn) {
+  default <N> Result<N, E> then(@NonNull Function<V, Result<N, E>> fn) {
     return switch (this) {
       case Ok(var item) -> Remap.returnSupplied(fn.apply(item));
       case Err(var ignored) -> new Err<>(ignored);
@@ -652,11 +746,10 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if error is null
    */
   default Result<V, E> taint(@NonNull E item) {
-    if (isOk()) {
-      return new Err<>(item);
-    } else {
-      return this;
-    }
+    return switch (this) {
+      case Ok(var ignored) -> new Err<>(item);
+      case Err(var retained) -> new Err<>(retained);
+    };
   }
 
   /**
@@ -672,13 +765,13 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if any argument is null
    */
   default Result<V, E> taint(@NonNull Predicate<V> cond, @NonNull E item) {
-    if (isOkAnd(cond)) {
-      return new Err<>(item);
-    } else {
-      return this;
-    }
+    return switch (this) {
+      case Ok(var val) when cond.test(val) -> new Err<>(item);
+      case Ok(var val) -> new Ok<>(val);
+      case Err(var retained) -> new Err<>(retained);
+    };
   }
-  
+
   /**
    * Converts an ERR result to OK with the given value, or passes through OK unchanged.
    * <pre>{@code
@@ -691,11 +784,10 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if item is null
    */
   default Result<V, E> recover(@NonNull V item) {
-    if (isErr()) {
-      return new Ok<>(item);
-    } else {
-      return this;
-    }
+    return switch (this) {
+      case Ok(var val) -> new Ok<>(val);
+      case Err(var ignored) -> new Ok<>(item);
+    };
   }
 
   /**
@@ -710,7 +802,10 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if supplier is null
    */
   default Result<V, E> recover(@NonNull Supplier<V> fn) {
-    return recover(fn.get());
+    return switch (this) {
+      case Ok(var val) -> new Ok<>(val);
+      case Err(var ignored) -> new Ok<>(fn.get());
+    };
   }
 
   /**
@@ -725,11 +820,10 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if function is null
    */
   default Result<V, E> recover(@NonNull Function<E, V> fn) {
-    if (this instanceof Err(var item)) {
-      return recover(fn.apply(item));
-    }
-
-    return this;
+    return switch (this) {
+      case Ok(var val) -> new Ok<>(val);
+      case Err(var err) -> new Ok<>(fn.apply(err));
+    };
   }
 
   /**
@@ -748,11 +842,11 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if any argument is null
    */
   default Result<V, E> recover(@NonNull Predicate<E> cond, @NonNull V item) {
-    if (isErrAnd(cond)) {
-      return new Ok<>(item);
-    } else {
-      return this;
-    }
+    return switch (this) {
+      case Ok(var val) -> new Ok<>(val);
+      case Err(var err) when cond.test(err) -> new Ok<>(item);
+      case Err(var retained) -> new Err<>(retained);
+    };
   }
 
   /**
@@ -771,7 +865,11 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if any argument is null
    */
   default Result<V, E> recover(@NonNull Predicate<E> cond, @NonNull Supplier<V> fn) {
-    return recover(cond, fn.get());
+    return switch (this) {
+      case Ok(var val) -> new Ok<>(val);
+      case Err(var err) when cond.test(err) -> new Ok<>(fn.get());
+      case Err(var retained) -> new Err<>(retained);
+    };
   }
 
   /**
@@ -790,11 +888,11 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if any argument is null
    */
   default Result<V, E> recover(@NonNull Predicate<E> cond, @NonNull Function<E, V> fn) {
-    if (this instanceof Err(var item) && cond.test(item)) {
-      return recover(fn);
-    }
-
-    return this;
+    return switch (this) {
+      case Ok(var val) -> new Ok<>(val);
+      case Err(var err) when cond.test(err) -> new Ok<>(fn.apply(err));
+      case Err(var retained) -> new Err<>(retained);
+    };
   }
 
   /**
@@ -814,11 +912,11 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if any argument is null
    */
   default Result<V, E> recover(@NonNull Class<? extends Exception> type, @NonNull V item) {
-    if (isErrAnd(type)) {
-      return new Ok<>(item);
-    } else {
-      return this;
-    }
+    return switch (this) {
+      case Ok(var val) -> new Ok<>(val);
+      case Err(var err) when type.isAssignableFrom(err.getClass()) -> new Ok<>(item);
+      case Err(var retained) -> new Err<>(retained);
+    };
   }
 
   /**
@@ -837,7 +935,11 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if any argument is null
    */
   default Result<V, E> recover(@NonNull Class<? extends Exception> type, @NonNull Supplier<V> fn) {
-    return recover(type, fn.get());
+    return switch (this) {
+      case Ok(var val) -> new Ok<>(val);
+      case Err(var err) when type.isAssignableFrom(err.getClass()) -> new Ok<>(fn.get());
+      case Err(var retained) -> new Err<>(retained);
+    };
   }
 
   /**
@@ -856,11 +958,11 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * @throws IllegalArgumentException if any argument is null
    */
   default Result<V, E> recover(@NonNull Class<? extends Exception> type, @NonNull Function<E, V> fn) {
-    if (this instanceof Err(var item) && type.isAssignableFrom(item.getClass())) {
-      return recover(fn);
-    }
-
-    return this;
+    return switch (this) {
+      case Ok(var val) -> new Ok<>(val);
+      case Err(var err) when type.isAssignableFrom(err.getClass()) -> new Ok<>(fn.apply(err));
+      case Err(var retained) -> new Err<>(retained);
+    };
   }
   
   /**
@@ -934,7 +1036,7 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
   }
   
   /**
-   * Extracts the OK value, or throws a {@link Failure} wrapping the error.
+   * Extracts the OK value, or throws a {@link Wrap.Failure} wrapping the error.
    * <pre>{@code
    * Result<String, IOException> ok = new Ok<>("data");
    * String data = ok.unwrap(); // "data"
@@ -943,12 +1045,12 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
    * String data = err.unwrap(); // throws Failure(IOException)
    * }</pre>
    * @return the OK value
-   * @throws Failure wrapping the ERR error
+   * @throws Wrap.Failure wrapping the ERR error
    */
   default V unwrap() {
     return switch (this) {
       case Ok(var item) -> item;
-      case Err(var item) -> throw new Failure(item);
+      case Err(var item) -> throw new Wrap.Failure(item);
     };
   }
 
@@ -1010,5 +1112,5 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
       case Err(var item) -> throw item;
     };
   }
-  
+
 }

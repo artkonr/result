@@ -6,7 +6,7 @@ An alternative to `try/catch` following the design pattern offered by `java.util
 
 ## Getting started
 
-Library installation is available for [Maven](#maven) and [Gradle](#gradle) and targets Java 17.
+Library installation is available for [Maven](#maven) and [Gradle](#gradle) and targets Java 21.
 
 ### Maven
 
@@ -47,7 +47,7 @@ public void doingSomeWork() {
                     text -> !isTextOk(text),               // check if the value is what we expect
                     text -> createError(text)              // and make and error if it is not
             )
-            .mapErr(generic -> wrapError(generic));        // wrap into a domain-specific error
+            .stack(generic -> wrapError(generic));        // wrap into a domain-specific error
 
     // we can recover from errors by using fallbacks
     String getOrFallback = fallibleIO.unwrapOr("fallback");
@@ -60,7 +60,7 @@ public void doingSomeWork() {
 
     // if we don't care about the result value,
     // we can always drop it and, say, invoke a callback
-    FlagResult<RuntimeException> dropped = fallibleIO.drop();
+    Done<RuntimeException> dropped = fallibleIO.drop();
     dropped.ifOk(() -> System.out.println("well done"));
 }
 ```
@@ -95,12 +95,23 @@ public void doingSomeWork() {
 
 ```
 
+### Pattern matching
+
+```java
+
+public void doSomeWork() {
+  String ok = switch (fallibleIo()) {
+    case Ok(var item) -> item;
+    case Err(var err) -> "error: " + err.getMessage();
+  };
+}
+```
+
 ### State model
 
 Library API offers a variety of transformation methods, such as:
 
-* `map` / `mapErr` / `flatMap` - modify the internal state of the monad;
-* `fork` - OK -> error conversion, matching the error type;
+* `map` / `stack` / `flatMap` - modify the internal state of the monad;
 * `taint` - OK -> error conversion, broadening the error type;
 * `recover` - error -> OK conversion;
 * `peek` - fluent introspection on the state.

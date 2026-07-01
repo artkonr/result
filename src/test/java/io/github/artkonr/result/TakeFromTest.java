@@ -147,4 +147,59 @@ class TakeFromTest {
         assertEquals(2, values.length);
     }
 
+    @Test
+    void should_take_error_from_done_head_when_both_failure() {
+        Exception leftErr = new RuntimeException("left");
+        Exception rightErr = new RuntimeException("right");
+        Done<Exception> left = new io.github.artkonr.result.Failure<>(leftErr);
+        Done<Exception> right = new io.github.artkonr.result.Failure<>(rightErr);
+
+        Optional<Exception> taken = TakeFrom.HEAD.takeError(left, right);
+        assertTrue(taken.isPresent());
+        assertSame(leftErr, taken.get());
+    }
+
+    @Test
+    void should_take_error_from_done_tail_when_both_failure() {
+        Exception leftErr = new RuntimeException("left");
+        Exception rightErr = new RuntimeException("right");
+        Done<Exception> left = new io.github.artkonr.result.Failure<>(leftErr);
+        Done<Exception> right = new io.github.artkonr.result.Failure<>(rightErr);
+
+        Optional<Exception> taken = TakeFrom.TAIL.takeError(left, right);
+        assertTrue(taken.isPresent());
+        assertSame(rightErr, taken.get());
+    }
+
+    @Test
+    void should_take_error_from_done_left_when_only_left_failure() {
+        Exception leftErr = new RuntimeException("left");
+        Done<Exception> left = new io.github.artkonr.result.Failure<>(leftErr);
+        Done<Exception> right = new io.github.artkonr.result.Success<>();
+
+        Optional<Exception> taken = TakeFrom.HEAD.takeError(left, right);
+        assertTrue(taken.isPresent());
+        assertSame(leftErr, taken.get());
+    }
+
+    @Test
+    void should_take_error_from_done_right_when_only_right_failure() {
+        Exception rightErr = new RuntimeException("right");
+        Done<Exception> left = new io.github.artkonr.result.Success<>();
+        Done<Exception> right = new io.github.artkonr.result.Failure<>(rightErr);
+
+        Optional<Exception> taken = TakeFrom.HEAD.takeError(left, right);
+        assertTrue(taken.isPresent());
+        assertSame(rightErr, taken.get());
+    }
+
+    @Test
+    void should_return_empty_when_done_both_success() {
+        Done<Exception> left = new io.github.artkonr.result.Success<>();
+        Done<Exception> right = new io.github.artkonr.result.Success<>();
+
+        Optional<Exception> taken = TakeFrom.HEAD.takeError(left, right);
+        assertTrue(taken.isEmpty());
+    }
+
 }
