@@ -13,14 +13,14 @@ class FailureTest {
     @Test
     void should_wrap_exception_as_cause() {
         RuntimeException cause = new RuntimeException("original error");
-        Failure failure = new Failure(cause);
+        Wrap.Failure failure = new Wrap.Failure(cause);
         assertSame(cause, failure.getCause());
     }
 
     @Test
     void should_preserve_exception_message() {
         RuntimeException cause = new RuntimeException("error message");
-        Failure failure = new Failure(cause);
+        Wrap.Failure failure = new Wrap.Failure(cause);
         assertSame(cause, failure.getCause());
         assertEquals("error message", failure.getCause().getMessage());
     }
@@ -28,7 +28,7 @@ class FailureTest {
     @ParameterizedTest
     @MethodSource("exceptionProvider")
     void should_wrap_various_exception_types(Exception exception) {
-        Failure failure = new Failure(exception);
+        Wrap.Failure failure = new Wrap.Failure(exception);
         assertSame(exception, failure.getCause());
     }
 
@@ -43,20 +43,20 @@ class FailureTest {
 
     @Test
     void should_be_runtime_exception() {
-        Failure failure = new Failure(new RuntimeException("error"));
+        Wrap.Failure failure = new Wrap.Failure(new RuntimeException("error"));
         assertInstanceOf(RuntimeException.class, failure);
     }
 
     @Test
     void should_wrap_null_cause() {
-        Failure failure = new Failure(null);
+        Wrap.Failure failure = new Wrap.Failure(null);
         assertNull(failure.getCause());
     }
 
     @Test
     void should_preserve_exception_stack_trace() {
         RuntimeException cause = new RuntimeException("error");
-        Failure failure = new Failure(cause);
+        Wrap.Failure failure = new Wrap.Failure(cause);
         assertArrayEquals(cause.getStackTrace(), failure.getCause().getStackTrace());
     }
 
