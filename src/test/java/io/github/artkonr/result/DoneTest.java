@@ -644,7 +644,7 @@ class DoneTest {
         }
 
         @Test
-        void omit_taint_if_fail() {
+        void skip_taint_if_fail() {
             IOException original = new IOException("original");
             Done<IOException> done = new Failure<>(original);
             IOException newError = new IOException("new");
@@ -654,9 +654,29 @@ class DoneTest {
         }
 
         @Test
+        void taint_if_success_w_fn() {
+            Done<IOException> done = new Success<>();
+            IOException error = new IOException("tainted");
+            Done<IOException> result = done.taint(() -> error);
+            assertTrue(result.isFailure());
+            assertSame(error, result.failure());
+        }
+
+        @Test
+        void skip_taint_if_fail_w_fn() {
+            IOException original = new IOException("original");
+            Done<IOException> done = new Failure<>(original);
+            IOException newError = new IOException("new");
+            Done<IOException> result = done.taint(() -> newError);
+            assertTrue(result.isFailure());
+            assertSame(original, result.failure());
+        }
+
+        @Test
         void throws_if_no_arg() {
             Done<IOException> done = new Success<>();
-            assertThrows(IllegalArgumentException.class, () -> done.taint(null));
+            assertThrows(IllegalArgumentException.class, () -> done.taint((IOException) null));
+            assertThrows(IllegalArgumentException.class, () -> done.taint((Supplier<IOException>) null));
         }
     }
 

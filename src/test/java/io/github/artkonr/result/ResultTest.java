@@ -794,6 +794,8 @@ class ResultTest {
 
     @Nested
     class Taint {
+
+        // with item
         @Test
         void taint_if_ok() {
             Result<String, Exception> result = new Ok<>("value");
@@ -811,14 +813,6 @@ class ResultTest {
             Result<String, Exception> tainted = result.taint(taint);
             assertTrue(tainted.isErr());
             assertSame(original, tainted.err());
-        }
-
-        @Test
-        void throws_if_no_arg() {
-            Result<String, Exception> result = new Ok<>("value");
-            assertThrows(IllegalArgumentException.class, () -> result.taint(null));
-            assertThrows(IllegalArgumentException.class, () -> result.taint(null, new RuntimeException()));
-            assertThrows(IllegalArgumentException.class, () -> result.taint(v -> true, null));
         }
 
         @Test
@@ -847,6 +841,120 @@ class ResultTest {
             Result<String, Exception> tainted = result.taint(s -> s.equals("1"), taint);
             assertTrue(tainted.isErr());
             assertSame(original, tainted.err());
+        }
+
+        // with supplier
+
+        @Test
+        void taint_if_ok_w_supplier() {
+            Result<String, Exception> result = new Ok<>("value");
+            Exception ex = new RuntimeException("taint");
+            Result<String, Exception> tainted = result.taint(() -> ex);
+            assertTrue(tainted.isErr());
+            assertSame(ex, tainted.err());
+        }
+
+        @Test
+        void skip_if_err_w_supplier() {
+            Exception original = new RuntimeException("original");
+            Result<String, Exception> result = new Err<>(original);
+            Exception taint = new RuntimeException("taint");
+            Result<String, Exception> tainted = result.taint(() -> taint);
+            assertTrue(tainted.isErr());
+            assertSame(original, tainted.err());
+        }
+
+        @Test
+        void taint_if_ok_w_predicate_w_supplier() {
+            Result<Integer, Exception> result = new Ok<>(5);
+            Exception ex = new RuntimeException("taint");
+            Result<Integer, Exception> tainted = result.taint(v -> v > 0, () -> ex);
+            assertTrue(tainted.isErr());
+            assertSame(ex, tainted.err());
+        }
+
+        @Test
+        void skip_if_ok_w_predicate_not_matched_w_supplier() {
+            Result<Integer, Exception> result = new Ok<>(5);
+            Exception ex = new RuntimeException("taint");
+            Result<Integer, Exception> tainted = result.taint(v -> v < 0, () -> ex);
+            assertTrue(tainted.isOk());
+            assertEquals(5, tainted.value());
+        }
+
+        @Test
+        void skip_if_err_w_predicate_w_supplier() {
+            Exception original = new RuntimeException("original");
+            Result<String, Exception> result = new Err<>(original);
+            Exception taint = new RuntimeException("taint");
+            Result<String, Exception> tainted = result.taint(s -> s.equals("1"), () -> taint);
+            assertTrue(tainted.isErr());
+            assertSame(original, tainted.err());
+        }
+
+        // with function
+
+        @Test
+        void taint_if_ok_w_fn() {
+            Result<String, Exception> result = new Ok<>("value");
+            Exception ex = new RuntimeException("taint");
+            Result<String, Exception> tainted = result.taint(v -> ex);
+            assertTrue(tainted.isErr());
+            assertSame(ex, tainted.err());
+        }
+
+        @Test
+        void skip_if_err_w_fn() {
+            Exception original = new RuntimeException("original");
+            Result<String, Exception> result = new Err<>(original);
+            Exception taint = new RuntimeException("taint");
+            Result<String, Exception> tainted = result.taint(v -> taint);
+            assertTrue(tainted.isErr());
+            assertSame(original, tainted.err());
+        }
+
+        @Test
+        void taint_if_ok_w_predicate_w_fn() {
+            Result<Integer, Exception> result = new Ok<>(5);
+            Exception ex = new RuntimeException("taint");
+            Result<Integer, Exception> tainted = result.taint(v -> v > 0, v -> ex);
+            assertTrue(tainted.isErr());
+            assertSame(ex, tainted.err());
+        }
+
+        @Test
+        void skip_if_ok_w_predicate_not_matched_w_fn() {
+            Result<Integer, Exception> result = new Ok<>(5);
+            Exception ex = new RuntimeException("taint");
+            Result<Integer, Exception> tainted = result.taint(v -> v < 0, v -> ex);
+            assertTrue(tainted.isOk());
+            assertEquals(5, tainted.value());
+        }
+
+        @Test
+        void skip_if_err_w_predicate_w_fn() {
+            Exception original = new RuntimeException("original");
+            Result<String, Exception> result = new Err<>(original);
+            Exception taint = new RuntimeException("taint");
+            Result<String, Exception> tainted = result.taint(s -> s.equals("1"), v -> taint);
+            assertTrue(tainted.isErr());
+            assertSame(original, tainted.err());
+        }
+
+        @Test
+        void throws_if_no_arg() {
+            Result<String, Exception> result = new Ok<>("value");
+            assertThrows(IllegalArgumentException.class, () -> result.taint((Exception) null));
+            assertThrows(IllegalArgumentException.class, () -> result.taint(null, (Exception) null));
+            assertThrows(IllegalArgumentException.class, () -> result.taint(v -> true, (Exception) null));
+
+            assertThrows(IllegalArgumentException.class, () -> result.taint((Supplier<Exception>) null));
+            assertThrows(IllegalArgumentException.class, () -> result.taint(null, (Supplier<Exception>) null));
+            assertThrows(IllegalArgumentException.class, () -> result.taint(v -> true, (Supplier<Exception>) null));
+
+            assertThrows(IllegalArgumentException.class, () -> result.taint((Function<String, Exception>) null));
+            assertThrows(IllegalArgumentException.class, () -> result.taint(null, (Function<String, Exception>) null));
+            assertThrows(IllegalArgumentException.class, () -> result.taint(v -> true, (Function<String, Exception>) null));
         }
     }
 

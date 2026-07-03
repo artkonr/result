@@ -540,7 +540,25 @@ public sealed interface Done<E extends Exception> permits Success, Failure {
   default Done<E> taint(@NonNull E item) {
     return switch (this) {
       case Success() -> new Failure<>(item);
-      case Failure(var ignored) -> new Failure<>(ignored);
+      case Failure(var retained) -> new Failure<>(retained);
+    };
+  }
+
+  /**
+   * Converts a Success to Failure using a supplier, or passes through Failure unchanged.
+   * <pre>{@code
+   * Done<IOException> done = new Success<>();
+   * Done<IOException> tainted = done.taint(() -> new IOException("tainted"));
+   * // Done is Failure(IOException("tainted"))
+   * }</pre>
+   * @param fn supplier for error to inject
+   * @return new Failure with supplied error, or same Failure
+   * @throws IllegalArgumentException if supplier is null
+   */
+  default Done<E> taint(@NonNull Supplier<E> fn) {
+    return switch (this) {
+      case Success() -> new Failure<>(fn.get());
+      case Failure(var retained) -> new Failure<>(retained);
     };
   }
 
