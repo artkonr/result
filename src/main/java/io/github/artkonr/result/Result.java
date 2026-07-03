@@ -773,6 +773,82 @@ public sealed interface Result<V, E extends Exception> permits Ok, Err {
   }
 
   /**
+   * Converts an OK result to ERR using a supplier, or passes through ERR unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> ok = new Ok<>(5);
+   * Result<Integer, IOException> tainted = ok.taint(() -> new IOException("tainted"));
+   * // Result is Err(IOException("tainted"))
+   * }</pre>
+   * @param fn supplier for error to inject
+   * @return new ERR with supplied error, or same ERR
+   * @throws IllegalArgumentException if supplier is null
+   */
+  default Result<V, E> taint(@NonNull Supplier<E> fn) {
+    return switch (this) {
+      case Ok(var ignored) -> new Err<>(fn.get());
+      case Err(var retained) -> new Err<>(retained);
+    };
+  }
+
+  /**
+   * Converts an OK result to ERR by transforming the value, or passes through ERR unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> ok = new Ok<>(5);
+   * Result<Integer, IOException> tainted = ok.taint(v -> new IOException("value: " + v));
+   * // Result is Err(IOException("value: 5"))
+   * }</pre>
+   * @param fn function to transform value to error
+   * @return new ERR with transformed error, or same ERR
+   * @throws IllegalArgumentException if function is null
+   */
+  default Result<V, E> taint(@NonNull Function<V, E> fn) {
+    return switch (this) {
+      case Ok(var item) -> new Err<>(fn.apply(item));
+      case Err(var retained) -> new Err<>(retained);
+    };
+  }
+
+  /**
+   * Converts an OK result to ERR if predicate holds using a supplier, or passes through unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> ok = new Ok<>(5);
+   * Result<Integer, IOException> tainted = ok.taint(v -> v > 0, () -> new IOException("positive"));
+   * // Result is Err(IOException("positive"))
+   * }</pre>
+   * @param cond predicate to test the value
+   * @param fn supplier for error to inject
+   * @return new ERR if OK and predicate holds, otherwise unchanged
+   * @throws IllegalArgumentException if any argument is null
+   */
+  default Result<V, E> taint(@NonNull Predicate<V> cond, @NonNull Supplier<E> fn) {
+    return switch (this) {
+      case Ok(var item) when cond.test(item) -> new Err<>(fn.get());
+      case Ok(var item) -> new Ok<>(item);
+      case Err(var retained) -> new Err<>(retained);
+    };
+  }
+
+  /**
+   * Converts an OK result to ERR if predicate holds by transforming the value, or passes through unchanged.
+   * <pre>{@code
+   * Result<Integer, IOException> ok = new Ok<>(5);
+   * Result<Integer, IOException> tainted = ok.taint(v -> v > 0, v -> new IOException("too high: " + v));
+   * // Result is Err(IOException("too high: 5"))
+   * }</pre>
+   * @param cond predicate to test the value
+   * @param fn function to transform value to error
+   * @return new ERR if OK and predicate holds, otherwise unchanged
+   * @throws IllegalArgumentException if any argument is null
+   */
+  default Result<V, E> taint(@NonNull Predicate<V> cond, @NonNull Function<V, E> fn) {
+    return switch (this) {
+      case Ok(var item) when cond.test(item) -> new Err<>(fn.apply(item));
+      case Ok(var item) -> new Ok<>(item);
+      case Err(var retained) -> new Err<>(retained);
+    };
+  }
+
+  /**
    * Converts an ERR result to OK with the given value, or passes through OK unchanged.
    * <pre>{@code
    * Result<Integer, IOException> err = new Err<>(new IOException());
